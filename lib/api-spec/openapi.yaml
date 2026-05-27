@@ -3,13 +3,28 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PeriOp Voice API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: patients
+    description: Patient management
+  - name: procedures
+    description: Surgical procedure management
+  - name: calls
+    description: Call scheduling and records
+  - name: templates
+    description: Call script templates
+  - name: alerts
+    description: Clinical alerts and flags
+  - name: dashboard
+    description: Summary and analytics
+  - name: users
+    description: Staff user management
+
 paths:
   /healthz:
     get:
@@ -24,13 +39,965 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── PATIENTS ──────────────────────────────────────────────────
+  /patients:
+    get:
+      operationId: listPatients
+      tags: [patients]
+      summary: List patients
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Patient list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Patient"
+    post:
+      operationId: createPatient
+      tags: [patients]
+      summary: Create patient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+
+  /patients/{id}:
+    get:
+      operationId: getPatient
+      tags: [patients]
+      summary: Get patient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Patient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "404":
+          description: Not found
+    patch:
+      operationId: updatePatient
+      tags: [patients]
+      summary: Update patient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "404":
+          description: Not found
+    delete:
+      operationId: deletePatient
+      tags: [patients]
+      summary: Delete patient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /patients/{id}/timeline:
+    get:
+      operationId: getPatientTimeline
+      tags: [patients]
+      summary: Get patient call timeline
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Timeline of calls for this patient
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallRecord"
+
+  # ── PROCEDURES ────────────────────────────────────────────────
+  /procedures:
+    get:
+      operationId: listProcedures
+      tags: [procedures]
+      summary: List procedures
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: dateFrom
+          schema: { type: string, format: date }
+        - in: query
+          name: dateTo
+          schema: { type: string, format: date }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Procedure list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Procedure"
+    post:
+      operationId: createProcedure
+      tags: [procedures]
+      summary: Create procedure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcedureInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+
+  /procedures/{id}:
+    get:
+      operationId: getProcedure
+      tags: [procedures]
+      summary: Get procedure
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Procedure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProcedure
+      tags: [procedures]
+      summary: Update procedure
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcedureUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProcedure
+      tags: [procedures]
+      summary: Delete procedure
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── SCHEDULED CALLS ───────────────────────────────────────────
+  /scheduled-calls:
+    get:
+      operationId: listScheduledCalls
+      tags: [calls]
+      summary: List scheduled calls
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, failed, no_answer, cancelled]
+        - in: query
+          name: callType
+          schema:
+            type: string
+            enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk]
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: procedureId
+          schema: { type: integer }
+        - in: query
+          name: scheduledDateFrom
+          schema: { type: string, format: date }
+        - in: query
+          name: scheduledDateTo
+          schema: { type: string, format: date }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Scheduled call list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledCall"
+
+  /scheduled-calls/{id}:
+    get:
+      operationId: getScheduledCall
+      tags: [calls]
+      summary: Get scheduled call
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Scheduled call
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledCall"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateScheduledCall
+      tags: [calls]
+      summary: Update scheduled call (e.g. reschedule or cancel)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduledCallUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledCall"
+        "404":
+          description: Not found
+
+  /scheduled-calls/{id}/trigger:
+    post:
+      operationId: triggerCall
+      tags: [calls]
+      summary: Manually trigger a scheduled call immediately
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Call triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledCall"
+        "404":
+          description: Not found
+
+  /procedures/{procedureId}/schedule-calls:
+    post:
+      operationId: scheduleProcedureCalls
+      tags: [calls]
+      summary: Auto-schedule all calls for a procedure
+      parameters:
+        - in: path
+          name: procedureId
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Calls scheduled
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledCall"
+        "404":
+          description: Not found
+
+  # ── CALL RECORDS ──────────────────────────────────────────────
+  /call-records:
+    get:
+      operationId: listCallRecords
+      tags: [calls]
+      summary: List call records
+      parameters:
+        - in: query
+          name: patientId
+          schema: { type: integer }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Call records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallRecord"
+
+  /call-records/{id}:
+    get:
+      operationId: getCallRecord
+      tags: [calls]
+      summary: Get call record with transcript
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Call record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallRecordDetail"
+        "404":
+          description: Not found
+
+  # ── ALERTS ────────────────────────────────────────────────────
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List clinical alerts
+      parameters:
+        - in: query
+          name: acknowledged
+          schema: { type: boolean }
+        - in: query
+          name: severity
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      tags: [alerts]
+      summary: Acknowledge an alert
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "404":
+          description: Not found
+
+  # ── CALL TEMPLATES ────────────────────────────────────────────
+  /call-templates:
+    get:
+      operationId: listCallTemplates
+      tags: [templates]
+      summary: List call templates
+      responses:
+        "200":
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallTemplate"
+    post:
+      operationId: createCallTemplate
+      tags: [templates]
+      summary: Create call template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallTemplateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallTemplate"
+
+  /call-templates/{id}:
+    get:
+      operationId: getCallTemplate
+      tags: [templates]
+      summary: Get call template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallTemplate"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateCallTemplate
+      tags: [templates]
+      summary: Update call template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallTemplateUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallTemplate"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCallTemplate
+      tags: [templates]
+      summary: Delete call template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── DASHBOARD ─────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary metrics
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/calls-today:
+    get:
+      operationId: getCallsToday
+      tags: [dashboard]
+      summary: Get today's call queue
+      responses:
+        "200":
+          description: Today's calls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledCall"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent call activity feed
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallRecord"
+
+  # ── USERS ─────────────────────────────────────────────────────
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List staff users (admin only)
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Provision a staff user account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user role (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+  # ── VAPI WEBHOOK ──────────────────────────────────────────────
+  /vapi/webhook:
+    post:
+      operationId: vapiWebhook
+      tags: [calls]
+      summary: Vapi call event webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VapiWebhookEvent"
+      responses:
+        "200":
+          description: Processed
+
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
+        status: { type: string }
+      required: [status]
+
+    # ── PATIENT ─────────────────────────────────────────────────
+    Patient:
+      type: object
+      required: [id, firstName, lastName, dateOfBirth, phone, createdAt]
+      properties:
+        id: { type: integer }
+        firstName: { type: string }
+        lastName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        phone: { type: string }
+        email: { type: ["string", "null"] }
+        mrn: { type: ["string", "null"] }
+        language: { type: string, default: "en" }
+        notes: { type: ["string", "null"] }
+        ehrPatientId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PatientInput:
+      type: object
+      required: [firstName, lastName, dateOfBirth, phone]
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        dateOfBirth: { type: string, format: date }
+        phone: { type: string }
+        email: { type: string }
+        mrn: { type: string }
+        language: { type: string, default: "en" }
+        notes: { type: string }
+        ehrPatientId: { type: string }
+
+    PatientUpdate:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        dateOfBirth: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        mrn: { type: string }
+        language: { type: string }
+        notes: { type: string }
+
+    # ── PROCEDURE ───────────────────────────────────────────────
+    Procedure:
+      type: object
+      required: [id, patientId, procedureName, scheduledDate, createdAt]
+      properties:
+        id: { type: integer }
+        patientId: { type: integer }
+        procedureName: { type: string }
+        procedureCode: { type: ["string", "null"] }
+        scheduledDate: { type: string, format: date-time }
+        facility: { type: ["string", "null"] }
+        surgeon: { type: ["string", "null"] }
+        arrivalTime: { type: ["string", "null"] }
+        specialInstructions: { type: ["string", "null"] }
+        ehrProcedureId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        patient:
+          $ref: "#/components/schemas/Patient"
+
+    ProcedureInput:
+      type: object
+      required: [patientId, procedureName, scheduledDate]
+      properties:
+        patientId: { type: integer }
+        procedureName: { type: string }
+        procedureCode: { type: string }
+        scheduledDate: { type: string, format: date-time }
+        facility: { type: string }
+        surgeon: { type: string }
+        arrivalTime: { type: string }
+        specialInstructions: { type: string }
+        ehrProcedureId: { type: string }
+
+    ProcedureUpdate:
+      type: object
+      properties:
+        procedureName: { type: string }
+        procedureCode: { type: string }
+        scheduledDate: { type: string }
+        facility: { type: string }
+        surgeon: { type: string }
+        arrivalTime: { type: string }
+        specialInstructions: { type: string }
+
+    # ── SCHEDULED CALL ──────────────────────────────────────────
+    ScheduledCall:
+      type: object
+      required: [id, procedureId, patientId, callType, status, scheduledAt, createdAt]
+      properties:
+        id: { type: integer }
+        procedureId: { type: integer }
+        patientId: { type: integer }
+        callType:
+          type: string
+          enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk]
         status:
           type: string
-      required:
-        - status
+          enum: [pending, in_progress, completed, failed, no_answer, cancelled]
+        scheduledAt: { type: string, format: date-time }
+        attemptCount: { type: integer }
+        lastAttemptAt: { type: ["string", "null"], format: date-time }
+        vapiCallId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        patient:
+          $ref: "#/components/schemas/Patient"
+        procedure:
+          $ref: "#/components/schemas/Procedure"
 
+    ScheduledCallUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [pending, cancelled] }
+        scheduledAt: { type: string, format: date-time }
+
+    # ── CALL RECORD ─────────────────────────────────────────────
+    CallRecord:
+      type: object
+      required: [id, scheduledCallId, patientId, callType, startedAt, createdAt]
+      properties:
+        id: { type: integer }
+        scheduledCallId: { type: integer }
+        patientId: { type: integer }
+        callType:
+          type: string
+          enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk]
+        outcome:
+          type: string
+          enum: [completed, no_answer, voicemail, failed, patient_declined]
+        durationSeconds: { type: ["integer", "null"] }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: ["string", "null"], format: date-time }
+        aiSummary: { type: ["string", "null"] }
+        hasFlags: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        patient:
+          $ref: "#/components/schemas/Patient"
+
+    CallRecordDetail:
+      allOf:
+        - $ref: "#/components/schemas/CallRecord"
+        - type: object
+          properties:
+            transcript: { type: ["string", "null"] }
+            structuredData: { type: ["object", "null"] }
+            flags:
+              type: array
+              items:
+                $ref: "#/components/schemas/Alert"
+
+    # ── ALERT ───────────────────────────────────────────────────
+    Alert:
+      type: object
+      required: [id, callRecordId, patientId, severity, category, description, acknowledged, createdAt]
+      properties:
+        id: { type: integer }
+        callRecordId: { type: integer }
+        patientId: { type: integer }
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        category: { type: string }
+        description: { type: string }
+        recommendedAction: { type: ["string", "null"] }
+        acknowledged: { type: boolean }
+        acknowledgedBy: { type: ["string", "null"] }
+        acknowledgedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        patient:
+          $ref: "#/components/schemas/Patient"
+
+    # ── CALL TEMPLATE ───────────────────────────────────────────
+    CallTemplate:
+      type: object
+      required: [id, callType, name, systemPrompt, language, active, createdAt]
+      properties:
+        id: { type: integer }
+        callType:
+          type: string
+          enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk]
+        name: { type: string }
+        systemPrompt: { type: string }
+        questions: { type: ["string", "null"] }
+        language: { type: string, default: "en" }
+        active: { type: boolean }
+        vapiAssistantId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CallTemplateInput:
+      type: object
+      required: [callType, name, systemPrompt, language]
+      properties:
+        callType: { type: string, enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk] }
+        name: { type: string }
+        systemPrompt: { type: string }
+        questions: { type: string }
+        language: { type: string }
+        active: { type: boolean }
+        vapiAssistantId: { type: string }
+
+    CallTemplateUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        systemPrompt: { type: string }
+        questions: { type: string }
+        language: { type: string }
+        active: { type: boolean }
+        vapiAssistantId: { type: string }
+
+    # ── DASHBOARD ───────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      required: [pendingCallsToday, activeCallsNow, completedToday, unresolvedAlerts, criticalAlerts, callCompletionRate]
+      properties:
+        pendingCallsToday: { type: integer }
+        activeCallsNow: { type: integer }
+        completedToday: { type: integer }
+        unresolvedAlerts: { type: integer }
+        criticalAlerts: { type: integer }
+        callCompletionRate: { type: number }
+        totalPatients: { type: integer }
+        proceduresThisWeek: { type: integer }
+
+    # ── USER ────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, clerkUserId, email, role, createdAt]
+      properties:
+        id: { type: integer }
+        clerkUserId: { type: string }
+        email: { type: string }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        role:
+          type: string
+          enum: [admin, coordinator]
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    UserInput:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [admin, coordinator] }
+
+    UserUpdate:
+      type: object
+      properties:
+        role: { type: string, enum: [admin, coordinator] }
+        active: { type: boolean }
+
+    # ── VAPI WEBHOOK ────────────────────────────────────────────
+    VapiWebhookEvent:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string }
+        call: { type: ["object", "null"] }
+        message: { type: ["object", "null"] }
+        artifact: { type: ["object", "null"] }
