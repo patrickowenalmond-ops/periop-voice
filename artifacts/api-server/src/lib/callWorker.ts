@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { scheduledCallsTable, patientsTable, proceduresTable } from "@workspace/db/schema";
-import { eq, and, lte, lt, notExists } from "drizzle-orm";
+import { eq, and, lte, lt, or, notExists } from "drizzle-orm";
 import { vapiClient } from "./vapiClient";
 import { callScheduler } from "./callScheduler";
 import { logger } from "./logger";
@@ -11,7 +11,6 @@ const POLL_INTERVAL_MS = 60_000;
 
 /**
  * Find procedures that have no scheduled calls yet and auto-schedule them.
- * This handles procedures added via EHR sync or direct API without explicit schedule-calls call.
  */
 async function autoScheduleNewProcedures(): Promise<void> {
   const unscheduledProcedures = await db
@@ -42,8 +41,9 @@ async function autoScheduleNewProcedures(): Promise<void> {
 }
 
 /**
- * Process all scheduled calls that are due: trigger Vapi calls, retry failed ones,
- * and mark exhausted ones as failed.
+ * Process all calls that are due for initiation or retry.
+ * Eligible statuses: "pending" (never tried or explicitly re-queued)
+ *                    "no_answer" and "failed" (retriable, within attempt cap)
  */
 async function processDueCalls(): Promise<void> {
   const now = new Date();
@@ -56,7 +56,11 @@ async function processDueCalls(): Promise<void> {
     .leftJoin(proceduresTable, eq(scheduledCallsTable.procedureId, proceduresTable.id))
     .where(
       and(
-        eq(scheduledCallsTable.status, "pending"),
+        or(
+          eq(scheduledCallsTable.status, "pending"),
+          eq(scheduledCallsTable.status, "no_answer"),
+          eq(scheduledCallsTable.status, "failed"),
+        ),
         lte(scheduledCallsTable.scheduledAt, now),
         lt(scheduledCallsTable.attemptCount, MAX_ATTEMPTS),
       ),
@@ -71,9 +75,12 @@ async function processDueCalls(): Promise<void> {
       continue;
     }
 
-    const lastAttempt = call.lastAttemptAt ? new Date(call.lastAttemptAt) : null;
-    if (lastAttempt && lastAttempt > retryBefore) {
-      continue;
+    // Enforce per-call retry backoff for non-pending statuses
+    if (call.status !== "pending") {
+      const lastAttempt = call.lastAttemptAt ? new Date(call.lastAttemptAt) : null;
+      if (lastAttempt && lastAttempt > retryBefore) {
+        continue;
+      }
     }
 
     const newAttemptCount = (call.attemptCount ?? 0) + 1;
@@ -103,7 +110,7 @@ async function processDueCalls(): Promise<void> {
       await db
         .update(scheduledCallsTable)
         .set({
-          status: isFinalAttempt ? "failed" : "pending",
+          status: isFinalAttempt ? "failed" : call.status,
           attemptCount: newAttemptCount,
           lastAttemptAt: now,
         })

@@ -35,7 +35,7 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
       return;
     }
 
-    const vapiCallId = call.id;
+    const vapiCallId = call.id as string;
 
     const [scheduledCall] = await db
       .select()
@@ -43,25 +43,30 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
       .where(eq(scheduledCallsTable.vapiCallId, vapiCallId));
 
     if (type === "call-ended" || type === "end-of-call-report") {
+      // If no matching scheduled call, log and bail — cannot safely insert FK refs
+      if (!scheduledCall) {
+        logger.warn({ vapiCallId, type }, "Vapi webhook: no matching scheduled call found, skipping record insertion");
+        res.json({ status: "ok" });
+        return;
+      }
+
       const transcript = artifact?.transcript ?? null;
       const summary = artifact?.summary ?? null;
       const durationSeconds = call.endedAt && call.startedAt
         ? Math.round((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000)
         : null;
 
-      if (scheduledCall) {
-        await db
-          .update(scheduledCallsTable)
-          .set({ status: "completed", lastAttemptAt: new Date() })
-          .where(eq(scheduledCallsTable.id, scheduledCall.id));
-      }
+      await db
+        .update(scheduledCallsTable)
+        .set({ status: "completed", lastAttemptAt: new Date() })
+        .where(eq(scheduledCallsTable.id, scheduledCall.id));
 
       const [record] = await db
         .insert(callRecordsTable)
         .values({
-          scheduledCallId: scheduledCall?.id ?? 0,
-          patientId: scheduledCall?.patientId ?? 0,
-          callType: scheduledCall?.callType ?? "post_op_24h",
+          scheduledCallId: scheduledCall.id,
+          patientId: scheduledCall.patientId,
+          callType: scheduledCall.callType,
           outcome: "completed",
           durationSeconds,
           startedAt: call.startedAt ? new Date(call.startedAt) : new Date(),
@@ -74,7 +79,7 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
 
       if (transcript && record) {
         try {
-          const analysis = await transcriptAnalyzer.analyze(transcript, scheduledCall?.callType ?? "post_op_24h");
+          const analysis = await transcriptAnalyzer.analyze(transcript, scheduledCall.callType);
           if (analysis.flags.length > 0) {
             await db
               .update(callRecordsTable)
@@ -100,12 +105,27 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
         }
       }
     } else if (type === "call-failed" || type === "no-answer") {
-      if (scheduledCall) {
-        await db
-          .update(scheduledCallsTable)
-          .set({ status: type === "no-answer" ? "no_answer" : "failed", lastAttemptAt: new Date() })
-          .where(eq(scheduledCallsTable.id, scheduledCall.id));
+      if (!scheduledCall) {
+        logger.warn({ vapiCallId, type }, "Vapi webhook: no matching scheduled call found for failure event");
+        res.json({ status: "ok" });
+        return;
       }
+
+      const newStatus = type === "no-answer" ? "no_answer" : "failed";
+      const newAttemptCount = scheduledCall.attemptCount + 1;
+      const isFinalAttempt = newAttemptCount >= 3;
+
+      await db
+        .update(scheduledCallsTable)
+        .set({
+          // If max attempts reached → permanent failure; otherwise keep retriable status
+          status: isFinalAttempt ? "failed" : newStatus,
+          attemptCount: newAttemptCount,
+          lastAttemptAt: new Date(),
+        })
+        .where(eq(scheduledCallsTable.id, scheduledCall.id));
+
+      logger.info({ callId: scheduledCall.id, newStatus, isFinalAttempt }, "Vapi call outcome recorded");
     }
   } catch (err) {
     logger.error({ err }, "Vapi webhook processing error");

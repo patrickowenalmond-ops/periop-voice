@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { patientsTable } from "./patients";
@@ -20,7 +20,9 @@ export const scheduledCallsTable = pgTable("scheduled_calls", {
   vapiCallId: text("vapi_call_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  uniqueIndex("scheduled_calls_procedure_call_type_idx").on(table.procedureId, table.callType),
+]);
 
 export const callRecordsTable = pgTable("call_records", {
   id: serial("id").primaryKey(),

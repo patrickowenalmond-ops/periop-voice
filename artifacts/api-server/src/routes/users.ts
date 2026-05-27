@@ -1,10 +1,30 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
+
+/**
+ * Determine what role a new user should receive on first login.
+ * - If ADMIN_CLERK_IDS env var lists this Clerk ID → admin
+ * - If no users exist yet in the DB (first ever login) → admin (bootstrap)
+ * - Otherwise → coordinator
+ */
+async function resolveInitialRole(clerkUserId: string): Promise<"admin" | "coordinator"> {
+  const adminIds = (process.env.ADMIN_CLERK_IDS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (adminIds.includes(clerkUserId)) return "admin";
+
+  const [{ total }] = await db.select({ total: count() }).from(usersTable);
+  if (total === 0) return "admin";
+
+  return "coordinator";
+}
 
 router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
   const clerkUserId = (req as any).auth?.userId;
@@ -16,6 +36,7 @@ router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
     const email = sessionClaims.email ?? `${clerkUserId}@unknown.com`;
     const firstName = sessionClaims.given_name ?? sessionClaims.firstName ?? null;
     const lastName = sessionClaims.family_name ?? sessionClaims.lastName ?? null;
+    const role = await resolveInitialRole(clerkUserId);
 
     [user] = await db
       .insert(usersTable)
@@ -24,7 +45,7 @@ router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
         email,
         firstName,
         lastName,
-        role: "coordinator",
+        role,
         active: "true",
       })
       .onConflictDoNothing()
