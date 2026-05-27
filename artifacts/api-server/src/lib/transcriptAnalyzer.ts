@@ -1,3 +1,5 @@
+import OpenAI from "openai";
+
 interface Flag {
   severity: "low" | "medium" | "high" | "critical";
   category: string;
@@ -21,21 +23,26 @@ const CRITICAL_KEYWORDS = [
   { pattern: /ate|food|drink|water/i, severity: "medium" as const, category: "NPO Compliance", description: "Patient may have violated NPO instructions", recommendedAction: "Verify fasting status before procedure" },
 ];
 
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI | null {
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  if (!baseURL || !apiKey) return null;
+  if (!_client) {
+    _client = new OpenAI({ apiKey, baseURL });
+  }
+  return _client;
+}
+
 class TranscriptAnalyzer {
   async analyze(transcript: string, callType: string): Promise<AnalysisResult> {
-    if (!process.env.OPENAI_API_KEY) {
-      return this.localAnalyze(transcript, callType);
-    }
-
-    try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
+    const client = getClient();
+    if (client) {
+      try {
+        const response = await client.chat.completions.create({
+          model: "gpt-5-mini",
+          max_completion_tokens: 8192,
           messages: [
             {
               role: "system",
@@ -49,19 +56,19 @@ Return JSON with: { "flags": [{ "severity": "low|medium|high|critical", "categor
             },
           ],
           response_format: { type: "json_object" },
-        }),
-      });
+        });
 
-      if (response.ok) {
-        const data = await response.json() as any;
-        const parsed = JSON.parse(data.choices[0].message.content);
-        return {
-          flags: parsed.flags ?? [],
-          structuredData: parsed.structuredData ?? {},
-        };
+        const content = response.choices[0]?.message?.content;
+        if (content) {
+          const parsed = JSON.parse(content);
+          return {
+            flags: parsed.flags ?? [],
+            structuredData: parsed.structuredData ?? {},
+          };
+        }
+      } catch {
+        // fall back to local analysis
       }
-    } catch {
-      // fall back to local analysis
     }
 
     return this.localAnalyze(transcript, callType);
