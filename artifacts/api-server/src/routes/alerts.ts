@@ -8,7 +8,10 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get("/alerts", async (req, res) => {
+type AlertSeverity = "low" | "medium" | "high" | "critical";
+const VALID_SEVERITIES: AlertSeverity[] = ["low", "medium", "high", "critical"];
+
+router.get("/alerts", async (req, res): Promise<void> => {
   const { acknowledged, severity, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
@@ -17,8 +20,8 @@ router.get("/alerts", async (req, res) => {
   if (acknowledged !== undefined) {
     conditions.push(eq(alertsTable.acknowledged, acknowledged === "true" ? "true" : "false"));
   }
-  if (severity) {
-    conditions.push(eq(alertsTable.severity, severity as string));
+  if (severity && VALID_SEVERITIES.includes(severity as AlertSeverity)) {
+    conditions.push(eq(alertsTable.severity, severity as AlertSeverity));
   }
 
   const rows = await db
@@ -37,7 +40,7 @@ router.get("/alerts", async (req, res) => {
   })));
 });
 
-router.post("/alerts/:id/acknowledge", async (req, res) => {
+router.post("/alerts/:id/acknowledge", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const clerkId = (req as any).auth?.userId ?? "system";
 
@@ -47,7 +50,10 @@ router.post("/alerts/:id/acknowledge", async (req, res) => {
     .where(eq(alertsTable.id, id))
     .returning();
 
-  if (!alert) return res.status(404).json({ error: "Not found" });
+  if (!alert) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, alert.patientId));
   res.json({ ...alert, acknowledged: alert.acknowledged === "true", patient });
 });

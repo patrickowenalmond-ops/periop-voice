@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from "@clerk/react";
@@ -74,7 +74,7 @@ function InvalidateOnSignIn() {
   const prev = useRef(0);
 
   useEffect(() => {
-    const cur = client?.activeSessions?.length ?? 0;
+    const cur = (client as any)?.activeSessions?.length ?? 0;
     if (cur !== prev.current) {
       qc.invalidateQueries();
       prev.current = cur;

@@ -1,13 +1,50 @@
 import { db } from "@workspace/db";
 import { scheduledCallsTable, patientsTable, proceduresTable } from "@workspace/db/schema";
-import { eq, and, lte, lt } from "drizzle-orm";
+import { eq, and, lte, lt, notExists } from "drizzle-orm";
 import { vapiClient } from "./vapiClient";
+import { callScheduler } from "./callScheduler";
 import { logger } from "./logger";
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_HOURS = 2;
 const POLL_INTERVAL_MS = 60_000;
 
+/**
+ * Find procedures that have no scheduled calls yet and auto-schedule them.
+ * This handles procedures added via EHR sync or direct API without explicit schedule-calls call.
+ */
+async function autoScheduleNewProcedures(): Promise<void> {
+  const unscheduledProcedures = await db
+    .select()
+    .from(proceduresTable)
+    .where(
+      notExists(
+        db
+          .select({ id: scheduledCallsTable.id })
+          .from(scheduledCallsTable)
+          .where(eq(scheduledCallsTable.procedureId, proceduresTable.id)),
+      ),
+    )
+    .limit(50);
+
+  if (unscheduledProcedures.length === 0) return;
+
+  logger.info({ count: unscheduledProcedures.length }, "Auto-scheduling calls for unscheduled procedures");
+
+  for (const procedure of unscheduledProcedures) {
+    try {
+      const scheduled = await callScheduler.scheduleForProcedure(procedure);
+      logger.info({ procedureId: procedure.id, callCount: scheduled.length }, "Auto-scheduled calls for procedure");
+    } catch (err) {
+      logger.error({ err, procedureId: procedure.id }, "Failed to auto-schedule calls for procedure");
+    }
+  }
+}
+
+/**
+ * Process all scheduled calls that are due: trigger Vapi calls, retry failed ones,
+ * and mark exhausted ones as failed.
+ */
 async function processDueCalls(): Promise<void> {
   const now = new Date();
   const retryBefore = new Date(now.getTime() - RETRY_DELAY_HOURS * 3_600_000);
@@ -80,6 +117,11 @@ async function processDueCalls(): Promise<void> {
   }
 }
 
+async function runWorkerCycle(): Promise<void> {
+  await autoScheduleNewProcedures();
+  await processDueCalls();
+}
+
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startCallWorker(): void {
@@ -89,13 +131,13 @@ export function startCallWorker(): void {
 
   workerTimer = setInterval(async () => {
     try {
-      await processDueCalls();
+      await runWorkerCycle();
     } catch (err) {
       logger.error({ err }, "Call worker poll cycle error");
     }
   }, POLL_INTERVAL_MS);
 
-  processDueCalls().catch((err) =>
+  runWorkerCycle().catch((err) =>
     logger.error({ err }, "Call worker initial poll error"),
   );
 }

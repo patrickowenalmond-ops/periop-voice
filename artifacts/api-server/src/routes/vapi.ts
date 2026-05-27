@@ -20,9 +20,10 @@ function verifyWebhookSecret(req: Request): boolean {
   return incoming === secret;
 }
 
-router.post("/vapi/webhook", async (req, res) => {
+router.post("/vapi/webhook", async (req, res): Promise<void> => {
   if (!verifyWebhookSecret(req)) {
-    return res.status(401).json({ error: "Invalid webhook secret" });
+    res.status(401).json({ error: "Invalid webhook secret" });
+    return;
   }
 
   const event = req.body;
@@ -30,7 +31,8 @@ router.post("/vapi/webhook", async (req, res) => {
 
   try {
     if (!call?.id) {
-      return res.json({ status: "ok" });
+      res.json({ status: "ok" });
+      return;
     }
 
     const vapiCallId = call.id;

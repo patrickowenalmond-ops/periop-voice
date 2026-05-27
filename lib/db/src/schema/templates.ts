@@ -1,8 +1,7 @@
 import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-
-export const callTypeEnum = ["pre_op_history", "pre_op_instructions", "post_op_24h", "post_op_72h", "post_op_2wk"] as const;
+import { callTypeEnum } from "./calls";
 
 export const callTemplatesTable = pgTable("call_templates", {
   id: serial("id").primaryKey(),

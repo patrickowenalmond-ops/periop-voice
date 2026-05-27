@@ -8,7 +8,7 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get("/patients", async (req, res) => {
+router.get("/patients", async (req, res): Promise<void> => {
   const { search, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
@@ -35,10 +35,11 @@ router.get("/patients", async (req, res) => {
   res.json(rows);
 });
 
-router.post("/patients", async (req, res) => {
+router.post("/patients", async (req, res): Promise<void> => {
   const { firstName, lastName, dateOfBirth, phone, email, mrn, language, notes, ehrPatientId } = req.body;
   if (!firstName || !lastName || !dateOfBirth || !phone) {
-    return res.status(400).json({ error: "firstName, lastName, dateOfBirth, phone are required" });
+    res.status(400).json({ error: "firstName, lastName, dateOfBirth, phone are required" });
+    return;
   }
   const [patient] = await db
     .insert(patientsTable)
@@ -47,14 +48,17 @@ router.post("/patients", async (req, res) => {
   res.status(201).json(patient);
 });
 
-router.get("/patients/:id", async (req, res) => {
+router.get("/patients/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, id));
-  if (!patient) return res.status(404).json({ error: "Not found" });
+  if (!patient) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json(patient);
 });
 
-router.patch("/patients/:id", async (req, res) => {
+router.patch("/patients/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { firstName, lastName, dateOfBirth, phone, email, mrn, language, notes } = req.body;
   const [patient] = await db
@@ -62,14 +66,20 @@ router.patch("/patients/:id", async (req, res) => {
     .set({ firstName, lastName, dateOfBirth, phone, email, mrn, language, notes })
     .where(eq(patientsTable.id, id))
     .returning();
-  if (!patient) return res.status(404).json({ error: "Not found" });
+  if (!patient) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json(patient);
 });
 
-router.delete("/patients/:id", async (req, res) => {
+router.delete("/patients/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [deleted] = await db.delete(patientsTable).where(eq(patientsTable.id, id)).returning();
-  if (!deleted) return res.status(404).json({ error: "Not found" });
+  if (!deleted) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.status(204).end();
 });
 

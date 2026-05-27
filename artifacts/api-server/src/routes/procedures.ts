@@ -8,7 +8,7 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get("/procedures", async (req, res) => {
+router.get("/procedures", async (req, res): Promise<void> => {
   const { patientId, dateFrom, dateTo, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
@@ -30,10 +30,11 @@ router.get("/procedures", async (req, res) => {
   res.json(rows.map(r => ({ ...r.procedure, patient: r.patient })));
 });
 
-router.post("/procedures", async (req, res) => {
+router.post("/procedures", async (req, res): Promise<void> => {
   const { patientId, procedureName, scheduledDate, procedureCode, facility, surgeon, arrivalTime, specialInstructions, ehrProcedureId } = req.body;
   if (!patientId || !procedureName || !scheduledDate) {
-    return res.status(400).json({ error: "patientId, procedureName, scheduledDate are required" });
+    res.status(400).json({ error: "patientId, procedureName, scheduledDate are required" });
+    return;
   }
   const [proc] = await db
     .insert(proceduresTable)
@@ -44,18 +45,21 @@ router.post("/procedures", async (req, res) => {
   res.status(201).json({ ...proc, patient });
 });
 
-router.get("/procedures/:id", async (req, res) => {
+router.get("/procedures/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [row] = await db
     .select({ procedure: proceduresTable, patient: patientsTable })
     .from(proceduresTable)
     .leftJoin(patientsTable, eq(proceduresTable.patientId, patientsTable.id))
     .where(eq(proceduresTable.id, id));
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json({ ...row.procedure, patient: row.patient });
 });
 
-router.patch("/procedures/:id", async (req, res) => {
+router.patch("/procedures/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { procedureName, procedureCode, scheduledDate, facility, surgeon, arrivalTime, specialInstructions } = req.body;
   const [proc] = await db
@@ -71,15 +75,21 @@ router.patch("/procedures/:id", async (req, res) => {
     })
     .where(eq(proceduresTable.id, id))
     .returning();
-  if (!proc) return res.status(404).json({ error: "Not found" });
+  if (!proc) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, proc.patientId));
   res.json({ ...proc, patient });
 });
 
-router.delete("/procedures/:id", async (req, res) => {
+router.delete("/procedures/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [deleted] = await db.delete(proceduresTable).where(eq(proceduresTable.id, id)).returning();
-  if (!deleted) return res.status(404).json({ error: "Not found" });
+  if (!deleted) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.status(204).end();
 });
 

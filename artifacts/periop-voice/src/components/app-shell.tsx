@@ -114,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <div className={cn("border-t border-sidebar-border p-2 flex items-center gap-2", collapsed && "justify-center")}>
-          <UserButton afterSignOutUrl="/" />
+          <UserButton />
           {!collapsed && me && (
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-sidebar-foreground truncate">

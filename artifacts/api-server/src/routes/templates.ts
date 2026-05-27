@@ -6,15 +6,26 @@ import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 
-router.get("/call-templates", requireAuth, async (req, res) => {
+router.get("/call-templates", requireAuth, async (req, res): Promise<void> => {
   const rows = await db.select().from(callTemplatesTable).orderBy(desc(callTemplatesTable.createdAt));
   res.json(rows.map(r => ({ ...r, active: r.active === "true" })));
 });
 
-router.post("/call-templates", async (req, res) => {
+router.get("/call-templates/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const [tpl] = await db.select().from(callTemplatesTable).where(eq(callTemplatesTable.id, id));
+  if (!tpl) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({ ...tpl, active: tpl.active === "true" });
+});
+
+router.post("/call-templates", requireAdmin, async (req, res): Promise<void> => {
   const { callType, name, systemPrompt, questions, language, active, vapiAssistantId } = req.body;
   if (!callType || !name || !systemPrompt) {
-    return res.status(400).json({ error: "callType, name, systemPrompt are required" });
+    res.status(400).json({ error: "callType, name, systemPrompt are required" });
+    return;
   }
   const [tpl] = await db
     .insert(callTemplatesTable)
@@ -23,14 +34,7 @@ router.post("/call-templates", async (req, res) => {
   res.status(201).json({ ...tpl, active: tpl.active === "true" });
 });
 
-router.get("/call-templates/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  const [tpl] = await db.select().from(callTemplatesTable).where(eq(callTemplatesTable.id, id));
-  if (!tpl) return res.status(404).json({ error: "Not found" });
-  res.json({ ...tpl, active: tpl.active === "true" });
-});
-
-router.patch("/call-templates/:id", async (req, res) => {
+router.patch("/call-templates/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { name, systemPrompt, questions, language, active, vapiAssistantId } = req.body;
   const update: Record<string, unknown> = {};
@@ -42,14 +46,20 @@ router.patch("/call-templates/:id", async (req, res) => {
   if (vapiAssistantId !== undefined) update.vapiAssistantId = vapiAssistantId;
 
   const [tpl] = await db.update(callTemplatesTable).set(update).where(eq(callTemplatesTable.id, id)).returning();
-  if (!tpl) return res.status(404).json({ error: "Not found" });
+  if (!tpl) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json({ ...tpl, active: tpl.active === "true" });
 });
 
-router.delete("/call-templates/:id", async (req, res) => {
+router.delete("/call-templates/:id", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [deleted] = await db.delete(callTemplatesTable).where(eq(callTemplatesTable.id, id)).returning();
-  if (!deleted) return res.status(404).json({ error: "Not found" });
+  if (!deleted) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.status(204).end();
 });
 

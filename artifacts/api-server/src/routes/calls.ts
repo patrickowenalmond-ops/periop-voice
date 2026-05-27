@@ -1,17 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { scheduledCallsTable, callRecordsTable, proceduresTable, patientsTable, alertsTable } from "@workspace/db/schema";
+import { scheduledCallsTable, callRecordsTable, proceduresTable, patientsTable, alertsTable, callTypeEnum, callStatusEnum } from "@workspace/db/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { callScheduler } from "../lib/callScheduler";
 import { vapiClient } from "../lib/vapiClient";
 import { requireAuth } from "../middlewares/auth";
+
+type CallStatus = typeof callStatusEnum[number];
+type CallType = typeof callTypeEnum[number];
 
 const router = Router();
 
 router.use(requireAuth);
 
 // ── PATIENT TIMELINE ──────────────────────────────────────────────────────────
-router.get("/patients/:id/timeline", async (req, res) => {
+router.get("/patients/:id/timeline", async (req, res): Promise<void> => {
   const patientId = Number(req.params.id);
   const rows = await db
     .select({ record: callRecordsTable, patient: patientsTable })
@@ -23,14 +26,18 @@ router.get("/patients/:id/timeline", async (req, res) => {
 });
 
 // ── SCHEDULED CALLS ───────────────────────────────────────────────────────────
-router.get("/scheduled-calls", async (req, res) => {
+router.get("/scheduled-calls", async (req, res): Promise<void> => {
   const { status, callType, patientId, procedureId, scheduledDateFrom, scheduledDateTo, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
 
   const conditions = [];
-  if (status) conditions.push(eq(scheduledCallsTable.status, status as string));
-  if (callType) conditions.push(eq(scheduledCallsTable.callType, callType as string));
+  if (status && (callStatusEnum as readonly string[]).includes(status as string)) {
+    conditions.push(eq(scheduledCallsTable.status, status as CallStatus));
+  }
+  if (callType && (callTypeEnum as readonly string[]).includes(callType as string)) {
+    conditions.push(eq(scheduledCallsTable.callType, callType as CallType));
+  }
   if (patientId) conditions.push(eq(scheduledCallsTable.patientId, Number(patientId)));
   if (procedureId) conditions.push(eq(scheduledCallsTable.procedureId, Number(procedureId)));
   if (scheduledDateFrom) conditions.push(gte(scheduledCallsTable.scheduledAt, new Date(scheduledDateFrom as string)));
@@ -49,7 +56,7 @@ router.get("/scheduled-calls", async (req, res) => {
   res.json(rows.map(r => ({ ...r.call, patient: r.patient, procedure: r.procedure })));
 });
 
-router.get("/scheduled-calls/:id", async (req, res) => {
+router.get("/scheduled-calls/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [row] = await db
     .select({ call: scheduledCallsTable, patient: patientsTable, procedure: proceduresTable })
@@ -57,11 +64,14 @@ router.get("/scheduled-calls/:id", async (req, res) => {
     .leftJoin(patientsTable, eq(scheduledCallsTable.patientId, patientsTable.id))
     .leftJoin(proceduresTable, eq(scheduledCallsTable.procedureId, proceduresTable.id))
     .where(eq(scheduledCallsTable.id, id));
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   res.json({ ...row.call, patient: row.patient, procedure: row.procedure });
 });
 
-router.patch("/scheduled-calls/:id", async (req, res) => {
+router.patch("/scheduled-calls/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { status, scheduledAt } = req.body;
   const update: Record<string, unknown> = {};
@@ -69,15 +79,17 @@ router.patch("/scheduled-calls/:id", async (req, res) => {
   if (scheduledAt) update.scheduledAt = new Date(scheduledAt);
 
   const [call] = await db.update(scheduledCallsTable).set(update).where(eq(scheduledCallsTable.id, id)).returning();
-  if (!call) return res.status(404).json({ error: "Not found" });
-
+  if (!call) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const [patient] = await db.select().from(patientsTable).where(eq(patientsTable.id, call.patientId));
   const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, call.procedureId));
   res.json({ ...call, patient, procedure });
 });
 
 // ── TRIGGER CALL ──────────────────────────────────────────────────────────────
-router.post("/scheduled-calls/:id/trigger", async (req, res) => {
+router.post("/scheduled-calls/:id/trigger", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [row] = await db
     .select({ call: scheduledCallsTable, patient: patientsTable, procedure: proceduresTable })
@@ -86,14 +98,19 @@ router.post("/scheduled-calls/:id/trigger", async (req, res) => {
     .leftJoin(proceduresTable, eq(scheduledCallsTable.procedureId, proceduresTable.id))
     .where(eq(scheduledCallsTable.id, id));
 
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   if (!["pending", "failed", "no_answer"].includes(row.call.status)) {
-    return res.status(409).json({ error: `Cannot trigger a call with status: ${row.call.status}` });
+    res.status(409).json({ error: `Cannot trigger a call with status: ${row.call.status}` });
+    return;
   }
 
   if (!row.patient?.phone) {
-    return res.status(422).json({ error: "Patient has no phone number on file" });
+    res.status(422).json({ error: "Patient has no phone number on file" });
+    return;
   }
 
   const newAttemptCount = (row.call.attemptCount ?? 0) + 1;
@@ -111,7 +128,8 @@ router.post("/scheduled-calls/:id/trigger", async (req, res) => {
     vapiCallId = vapiCall?.id ?? null;
   } catch (err: any) {
     if (!isStubMode) {
-      return res.status(502).json({ error: "Failed to initiate call with Vapi", detail: err?.message });
+      res.status(502).json({ error: "Failed to initiate call with Vapi", detail: err?.message });
+      return;
     }
   }
 
@@ -130,17 +148,19 @@ router.post("/scheduled-calls/:id/trigger", async (req, res) => {
 });
 
 // ── SCHEDULE PROCEDURE CALLS ──────────────────────────────────────────────────
-router.post("/procedures/:procedureId/schedule-calls", async (req, res) => {
+router.post("/procedures/:procedureId/schedule-calls", async (req, res): Promise<void> => {
   const procedureId = Number(req.params.procedureId);
   const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, procedureId));
-  if (!procedure) return res.status(404).json({ error: "Not found" });
-
+  if (!procedure) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const scheduledCalls = await callScheduler.scheduleForProcedure(procedure);
   res.status(201).json(scheduledCalls);
 });
 
 // ── CALL RECORDS ──────────────────────────────────────────────────────────────
-router.get("/call-records", async (req, res) => {
+router.get("/call-records", async (req, res): Promise<void> => {
   const { patientId, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
@@ -160,7 +180,7 @@ router.get("/call-records", async (req, res) => {
   res.json(rows.map(r => ({ ...r.record, hasFlags: r.record.hasFlags === "true", patient: r.patient })));
 });
 
-router.get("/call-records/:id", async (req, res) => {
+router.get("/call-records/:id", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const [row] = await db
     .select({ record: callRecordsTable, patient: patientsTable })
@@ -168,7 +188,10 @@ router.get("/call-records/:id", async (req, res) => {
     .leftJoin(patientsTable, eq(callRecordsTable.patientId, patientsTable.id))
     .where(eq(callRecordsTable.id, id));
 
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const flags = await db
     .select({ alert: alertsTable, patient: patientsTable })
