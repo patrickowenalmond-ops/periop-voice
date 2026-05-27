@@ -2,10 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { callTemplatesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 
-router.get("/call-templates", async (req, res) => {
+router.get("/call-templates", requireAuth, async (req, res) => {
   const rows = await db.select().from(callTemplatesTable).orderBy(desc(callTemplatesTable.createdAt));
   res.json(rows.map(r => ({ ...r, active: r.active === "true" })));
 });

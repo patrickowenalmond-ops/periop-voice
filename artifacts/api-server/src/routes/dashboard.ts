@@ -2,8 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { scheduledCallsTable, callRecordsTable, alertsTable, patientsTable, proceduresTable } from "@workspace/db/schema";
 import { eq, count, and, gte, lte, desc } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get("/dashboard/summary", async (req, res) => {
   const now = new Date();

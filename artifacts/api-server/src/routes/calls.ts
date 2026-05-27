@@ -4,8 +4,11 @@ import { scheduledCallsTable, callRecordsTable, proceduresTable, patientsTable, 
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { callScheduler } from "../lib/callScheduler";
 import { vapiClient } from "../lib/vapiClient";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
+
+router.use(requireAuth);
 
 // ── PATIENT TIMELINE ──────────────────────────────────────────────────────────
 router.get("/patients/:id/timeline", async (req, res) => {
@@ -82,24 +85,44 @@ router.post("/scheduled-calls/:id/trigger", async (req, res) => {
     .leftJoin(patientsTable, eq(scheduledCallsTable.patientId, patientsTable.id))
     .leftJoin(proceduresTable, eq(scheduledCallsTable.procedureId, proceduresTable.id))
     .where(eq(scheduledCallsTable.id, id));
+
   if (!row) return res.status(404).json({ error: "Not found" });
 
+  if (!["pending", "failed", "no_answer"].includes(row.call.status)) {
+    return res.status(409).json({ error: `Cannot trigger a call with status: ${row.call.status}` });
+  }
+
+  if (!row.patient?.phone) {
+    return res.status(422).json({ error: "Patient has no phone number on file" });
+  }
+
+  const newAttemptCount = (row.call.attemptCount ?? 0) + 1;
+  const isStubMode = !process.env.VAPI_API_KEY;
+
   let vapiCallId: string | null = null;
+
   try {
     const vapiCall = await vapiClient.initiateCall({
-      phone: row.patient?.phone ?? "",
+      phone: row.patient.phone,
       callType: row.call.callType,
-      patient: row.patient!,
+      patient: row.patient,
       procedure: row.procedure!,
     });
     vapiCallId = vapiCall?.id ?? null;
-  } catch {
-    // continue without vapi in dev/stub mode
+  } catch (err: any) {
+    if (!isStubMode) {
+      return res.status(502).json({ error: "Failed to initiate call with Vapi", detail: err?.message });
+    }
   }
 
   const [updated] = await db
     .update(scheduledCallsTable)
-    .set({ status: "in_progress", attemptCount: (row.call.attemptCount ?? 0) + 1, lastAttemptAt: new Date(), vapiCallId })
+    .set({
+      status: "in_progress",
+      attemptCount: newAttemptCount,
+      lastAttemptAt: new Date(),
+      vapiCallId,
+    })
     .where(eq(scheduledCallsTable.id, id))
     .returning();
 

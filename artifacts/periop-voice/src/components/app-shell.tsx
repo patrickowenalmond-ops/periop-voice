@@ -28,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useGetMe();
   const { data: alerts } = useListAlerts({ acknowledged: false } as any);
   const unresolvedCount = alerts?.filter(a => !(a as any).acknowledged).length ?? 0;
+  const isAdmin = me?.role === "admin";
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -78,31 +79,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
 
-          <div className="mt-2 mb-1 px-2.5">
-            {!collapsed && <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Admin</span>}
-            <div className="border-t border-sidebar-border mt-1" />
-          </div>
-
-          {adminItems.map(({ label, href, icon: Icon }) => {
-            const active = location === href || location.startsWith(href + "/");
-            return (
-              <Link
-                key={href}
-                href={href}
-                data-testid={`nav-${label.toLowerCase().replace(/\s/g, "-")}`}
-                className={cn(
-                  "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors",
-                  active
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  collapsed && "justify-center px-0"
+          {isAdmin && (
+            <>
+              <div className="mt-2 mb-1 px-2.5">
+                {!collapsed && (
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Admin</span>
                 )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </Link>
-            );
-          })}
+                <div className="border-t border-sidebar-border mt-1" />
+              </div>
+
+              {adminItems.map(({ label, href, icon: Icon }) => {
+                const active = location === href || location.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    data-testid={`nav-${label.toLowerCase().replace(/\s/g, "-")}`}
+                    className={cn(
+                      "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors",
+                      active
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      collapsed && "justify-center px-0"
+                    )}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {!collapsed && <span>{label}</span>}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* Footer */}

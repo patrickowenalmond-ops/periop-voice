@@ -2,8 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { proceduresTable, patientsTable } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get("/procedures", async (req, res) => {
   const { patientId, dateFrom, dateTo, limit = "50", offset = "0" } = req.query;

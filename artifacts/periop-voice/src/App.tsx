@@ -166,6 +166,35 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const [, setLocation] = useLocation();
+  const [meData, setMeData] = useState<{ role?: string } | null>(null);
+  const [meLoaded, setMeLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    fetch("/api/users/me")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setMeData(data); setMeLoaded(true); })
+      .catch(() => setMeLoaded(true));
+  }, [isSignedIn]);
+
+  if (!isLoaded || !meLoaded) return <AppLoading />;
+  if (!isSignedIn) { setLocation("/"); return null; }
+  if (meData?.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-foreground">Access Denied</p>
+          <p className="text-sm text-muted-foreground mt-1">Admin access is required to view this page.</p>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 function Router() {
   const { isSignedIn, isLoaded } = useAuth();
 
@@ -208,7 +237,7 @@ function Router() {
         <ProtectedRoute><AppShell><TemplatesPage /></AppShell></ProtectedRoute>
       } />
       <Route path="/admin/users" component={() =>
-        <ProtectedRoute><AppShell><AdminUsers /></AppShell></ProtectedRoute>
+        <AdminRoute><AppShell><AdminUsers /></AppShell></AdminRoute>
       } />
       <Route path="/settings" component={() =>
         <ProtectedRoute><AppShell><SettingsPage /></AppShell></ProtectedRoute>

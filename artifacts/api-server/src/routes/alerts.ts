@@ -2,8 +2,11 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { alertsTable, patientsTable } from "@workspace/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get("/alerts", async (req, res) => {
   const { acknowledged, severity, limit = "50", offset = "0" } = req.query;

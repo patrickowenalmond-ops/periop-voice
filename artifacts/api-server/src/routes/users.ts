@@ -2,22 +2,28 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 
-router.get("/users/me", async (req, res) => {
+router.get("/users/me", requireAuth, async (req, res) => {
   const clerkUserId = (req as any).auth?.userId;
-  if (!clerkUserId) return res.status(401).json({ error: "Unauthorized" });
 
   let [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
 
   if (!user) {
-    const clerkUser = (req as any).auth;
+    const sessionClaims = (req as any).auth?.sessionClaims ?? {};
+    const email = sessionClaims.email ?? `${clerkUserId}@unknown.com`;
+    const firstName = sessionClaims.given_name ?? sessionClaims.firstName ?? null;
+    const lastName = sessionClaims.family_name ?? sessionClaims.lastName ?? null;
+
     [user] = await db
       .insert(usersTable)
       .values({
         clerkUserId,
-        email: clerkUser?.sessionClaims?.email ?? `${clerkUserId}@unknown.com`,
+        email,
+        firstName,
+        lastName,
         role: "coordinator",
         active: "true",
       })
@@ -33,12 +39,12 @@ router.get("/users/me", async (req, res) => {
   res.json({ ...user, active: user.active === "true" });
 });
 
-router.get("/users", async (req, res) => {
+router.get("/users", requireAdmin, async (req, res) => {
   const rows = await db.select().from(usersTable).orderBy(desc(usersTable.createdAt));
   res.json(rows.map(u => ({ ...u, active: u.active === "true" })));
 });
 
-router.post("/users", async (req, res) => {
+router.post("/users", requireAdmin, async (req, res) => {
   const { email, firstName, lastName, role } = req.body;
   if (!email || !role) return res.status(400).json({ error: "email and role are required" });
 
@@ -49,7 +55,7 @@ router.post("/users", async (req, res) => {
   res.status(201).json({ ...user, active: user.active === "true" });
 });
 
-router.patch("/users/:id", async (req, res) => {
+router.patch("/users/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { role, active } = req.body;
   const update: Record<string, unknown> = {};

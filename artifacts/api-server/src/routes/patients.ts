@@ -2,15 +2,16 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { patientsTable } from "@workspace/db/schema";
 import { eq, ilike, or, desc } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
+
+router.use(requireAuth);
 
 router.get("/patients", async (req, res) => {
   const { search, limit = "50", offset = "0" } = req.query;
   const lim = Math.min(Number(limit), 200);
   const off = Number(offset);
-
-  let query = db.select().from(patientsTable).orderBy(desc(patientsTable.createdAt));
 
   let rows;
   if (search && typeof search === "string" && search.trim()) {
@@ -29,7 +30,7 @@ router.get("/patients", async (req, res) => {
       .limit(lim)
       .offset(off);
   } else {
-    rows = await query.limit(lim).offset(off);
+    rows = await db.select().from(patientsTable).orderBy(desc(patientsTable.createdAt)).limit(lim).offset(off);
   }
   res.json(rows);
 });
