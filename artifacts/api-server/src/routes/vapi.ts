@@ -111,21 +111,21 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
         return;
       }
 
+      // attemptCount was already incremented when the call was initiated (worker or trigger).
+      // The webhook only sets the outcome status — never increments attemptCount again.
+      const MAX_ATTEMPTS = 3;
       const newStatus = type === "no-answer" ? "no_answer" : "failed";
-      const newAttemptCount = scheduledCall.attemptCount + 1;
-      const isFinalAttempt = newAttemptCount >= 3;
+      const isFinalAttempt = scheduledCall.attemptCount >= MAX_ATTEMPTS;
 
       await db
         .update(scheduledCallsTable)
         .set({
-          // If max attempts reached → permanent failure; otherwise keep retriable status
           status: isFinalAttempt ? "failed" : newStatus,
-          attemptCount: newAttemptCount,
           lastAttemptAt: new Date(),
         })
         .where(eq(scheduledCallsTable.id, scheduledCall.id));
 
-      logger.info({ callId: scheduledCall.id, newStatus, isFinalAttempt }, "Vapi call outcome recorded");
+      logger.info({ callId: scheduledCall.id, newStatus, isFinalAttempt, attempts: scheduledCall.attemptCount }, "Vapi call outcome recorded");
     }
   } catch (err) {
     logger.error({ err }, "Vapi webhook processing error");
