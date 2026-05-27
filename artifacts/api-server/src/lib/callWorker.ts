@@ -6,8 +6,16 @@ import { callScheduler } from "./callScheduler";
 import { logger } from "./logger";
 
 const MAX_ATTEMPTS = 3;
-const RETRY_DELAY_HOURS = 2;
 const POLL_INTERVAL_MS = 60_000;
+
+/**
+ * How long to wait before retrying a call, keyed by the call's current status.
+ * Adjust these values to change retry cadence without touching any other logic.
+ */
+const RETRY_DELAY_HOURS: Record<string, number> = {
+  no_answer: 2,
+  failed: 4,
+};
 
 /**
  * Find procedures that have no scheduled calls yet and auto-schedule them.
@@ -47,7 +55,6 @@ async function autoScheduleNewProcedures(): Promise<void> {
  */
 async function processDueCalls(): Promise<void> {
   const now = new Date();
-  const retryBefore = new Date(now.getTime() - RETRY_DELAY_HOURS * 3_600_000);
 
   const rows = await db
     .select({ call: scheduledCallsTable, patient: patientsTable, procedure: proceduresTable })
@@ -75,8 +82,10 @@ async function processDueCalls(): Promise<void> {
       continue;
     }
 
-    // Enforce per-call retry backoff for non-pending statuses
+    // Enforce per-status retry backoff for non-pending calls
     if (call.status !== "pending") {
+      const delayHours = RETRY_DELAY_HOURS[call.status] ?? 2;
+      const retryBefore = new Date(now.getTime() - delayHours * 3_600_000);
       const lastAttempt = call.lastAttemptAt ? new Date(call.lastAttemptAt) : null;
       if (lastAttempt && lastAttempt > retryBefore) {
         continue;
