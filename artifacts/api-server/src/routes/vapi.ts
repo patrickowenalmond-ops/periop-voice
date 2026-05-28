@@ -4,6 +4,7 @@ import { scheduledCallsTable, callRecordsTable, alertsTable } from "@workspace/d
 import { eq } from "drizzle-orm";
 import { transcriptAnalyzer } from "../lib/transcriptAnalyzer";
 import { logger } from "../lib/logger";
+import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
 
@@ -143,6 +144,164 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
   }
 
   res.json({ status: "ok" });
+});
+
+router.get("/vapi/config", requireAuth, (_req, res): void => {
+  const devDomain = process.env.REPLIT_DEV_DOMAIN ?? "";
+  const webhookUrl = devDomain
+    ? `https://${devDomain}/api/vapi/webhook`
+    : null;
+
+  res.json({
+    webhookUrl,
+    isLive: !!(
+      process.env.VAPI_API_KEY &&
+      process.env.VAPI_PHONE_NUMBER_ID &&
+      process.env.VAPI_ASSISTANT_ID
+    ),
+    webhookSecretConfigured: !!process.env.VAPI_WEBHOOK_SECRET,
+  });
+});
+
+router.post("/vapi/test-webhook", requireAdmin, async (req, res): Promise<void> => {
+  const { vapiCallId, eventType = "end-of-call-report", transcript } = req.body as {
+    vapiCallId: string;
+    eventType?: string;
+    transcript?: string;
+  };
+
+  if (!vapiCallId) {
+    res.status(400).json({ error: "vapiCallId is required" });
+    return;
+  }
+
+  const fakeEvent = {
+    type: eventType,
+    call: {
+      id: vapiCallId,
+      startedAt: new Date(Date.now() - 120_000).toISOString(),
+      endedAt: new Date().toISOString(),
+    },
+    artifact: {
+      transcript: transcript ?? "Patient: Hello. Agent: Hello, this is a test call. Patient: I understand, thank you. Agent: Great, goodbye.",
+      summary: "Test webhook simulation",
+    },
+  };
+
+  const fakeReq = {
+    ...req,
+    body: fakeEvent,
+    headers: {
+      ...req.headers,
+      ...(process.env.VAPI_WEBHOOK_SECRET
+        ? { "x-vapi-secret": process.env.VAPI_WEBHOOK_SECRET }
+        : {}),
+    },
+  } as Request;
+
+  logger.info({ vapiCallId, eventType }, "Simulating Vapi webhook event");
+
+  const { type, call, artifact } = fakeEvent;
+
+  try {
+    const [scheduledCall] = await db
+      .select()
+      .from(scheduledCallsTable)
+      .where(eq(scheduledCallsTable.vapiCallId, vapiCallId));
+
+    if (!scheduledCall) {
+      res.status(404).json({ error: `No scheduled call found with vapiCallId: ${vapiCallId}` });
+      return;
+    }
+
+    if (type === "end-of-call-report" || type === "call-ended") {
+      const transcriptText = artifact?.transcript ?? null;
+      const summary = artifact?.summary ?? null;
+      const durationSeconds = call.endedAt && call.startedAt
+        ? Math.round((new Date(call.endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000)
+        : null;
+
+      await db
+        .update(scheduledCallsTable)
+        .set({ status: "completed", lastAttemptAt: new Date() })
+        .where(eq(scheduledCallsTable.id, scheduledCall.id));
+
+      const [record] = await db
+        .insert(callRecordsTable)
+        .values({
+          scheduledCallId: scheduledCall.id,
+          patientId: scheduledCall.patientId,
+          callType: scheduledCall.callType,
+          outcome: "completed",
+          durationSeconds,
+          startedAt: new Date(call.startedAt),
+          endedAt: new Date(call.endedAt),
+          transcript: transcriptText,
+          aiSummary: summary,
+          hasFlags: "false",
+        })
+        .returning();
+
+      let analysisResult = null;
+      if (transcriptText && record) {
+        try {
+          const analysis = await transcriptAnalyzer.analyze(transcriptText, scheduledCall.callType);
+          const hasFlags = analysis.flags.length > 0;
+          await db
+            .update(callRecordsTable)
+            .set({
+              hasFlags: hasFlags ? "true" : "false",
+              structuredData: Object.keys(analysis.structuredData).length > 0
+                ? JSON.stringify(analysis.structuredData)
+                : null,
+            })
+            .where(eq(callRecordsTable.id, record.id));
+
+          if (hasFlags) {
+            for (const flag of analysis.flags) {
+              await db.insert(alertsTable).values({
+                callRecordId: record.id,
+                patientId: record.patientId,
+                severity: flag.severity as "low" | "medium" | "high" | "critical",
+                category: flag.category,
+                description: flag.description,
+                recommendedAction: flag.recommendedAction,
+                acknowledged: "false",
+              });
+            }
+          }
+          analysisResult = analysis;
+        } catch (err) {
+          logger.error({ err }, "Test webhook: transcript analysis failed");
+        }
+      }
+
+      res.json({
+        status: "ok",
+        message: "Test webhook processed successfully",
+        scheduledCallId: scheduledCall.id,
+        callRecordId: record?.id,
+        flagsGenerated: analysisResult?.flags.length ?? 0,
+      });
+    } else if (type === "call-failed" || type === "no-answer") {
+      const MAX_ATTEMPTS = 3;
+      const newStatus = type === "no-answer" ? "no_answer" : "failed";
+      const isFinalAttempt = scheduledCall.attemptCount >= MAX_ATTEMPTS;
+      await db
+        .update(scheduledCallsTable)
+        .set({ status: isFinalAttempt ? "failed" : newStatus, lastAttemptAt: new Date() })
+        .where(eq(scheduledCallsTable.id, scheduledCall.id));
+
+      res.json({ status: "ok", message: `Call marked as ${newStatus}`, scheduledCallId: scheduledCall.id });
+    } else {
+      res.status(400).json({ error: `Unsupported eventType: ${type}` });
+    }
+  } catch (err) {
+    logger.error({ err }, "Test webhook simulation error");
+    res.status(500).json({ error: "Internal error during test webhook simulation" });
+  }
+
+  void fakeReq;
 });
 
 export default router;
