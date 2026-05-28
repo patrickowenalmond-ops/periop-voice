@@ -117,7 +117,11 @@ export default function CallsPage() {
                   </td>
                   <td className="px-4 py-2.5"><CallTypeBadge callType={call.callType} /></td>
                   <td className="px-4 py-2.5 text-muted-foreground">{formatters.datetime(call.scheduledAt)}</td>
-                  <td className="px-4 py-2.5"><CallStatusBadge status={call.status} /></td>
+                  <td className="px-4 py-2.5">
+                    <Link href={`/calls/${call.id}`} className="hover:opacity-80 transition-opacity">
+                      <CallStatusBadge status={call.status} />
+                    </Link>
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{call.attemptCount}</td>
                   <td className="px-4 py-2.5 text-right flex items-center justify-end gap-2">
                     {call.status === "pending" && (

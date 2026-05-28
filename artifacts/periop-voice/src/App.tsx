@@ -14,6 +14,7 @@ import PatientDetail from "@/pages/patient-detail";
 import ProceduresPage from "@/pages/procedures";
 import ProcedureDetail from "@/pages/procedure-detail";
 import CallsPage from "@/pages/calls";
+import ScheduledCallDetail from "@/pages/scheduled-call-detail";
 import AlertsPage from "@/pages/alerts";
 import CallRecordDetail from "@/pages/call-record-detail";
 import TemplatesPage from "@/pages/templates";
@@ -226,6 +227,9 @@ function Router() {
       } />
       <Route path="/calls" component={() =>
         <ProtectedRoute><AppShell><CallsPage /></AppShell></ProtectedRoute>
+      } />
+      <Route path="/calls/:id" component={() =>
+        <ProtectedRoute><AppShell><ScheduledCallDetail /></AppShell></ProtectedRoute>
       } />
       <Route path="/alerts" component={() =>
         <ProtectedRoute><AppShell><AlertsPage /></AppShell></ProtectedRoute>
