@@ -46,6 +46,15 @@ export async function registerVapiWebhook(): Promise<void> {
   const webhookUrl = `https://${devDomain}/api/vapi/webhook`;
   const secret = process.env.VAPI_WEBHOOK_SECRET;
 
+  if (!secret) {
+    logger.warn(
+      "VAPI_WEBHOOK_SECRET is not set. Webhooks will be accepted without signature verification, " +
+      "which means any caller can send fabricated events. " +
+      "Generate a secret, set it in Replit Secrets as VAPI_WEBHOOK_SECRET, " +
+      "and paste the same value into your Vapi dashboard under Assistant → Server → Secret."
+    );
+  }
+
   const serverConfig: VapiAssistantServerConfig = { url: webhookUrl };
   if (secret) {
     serverConfig.secret = secret;

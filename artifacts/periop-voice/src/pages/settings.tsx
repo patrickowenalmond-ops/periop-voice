@@ -105,7 +105,7 @@ export default function SettingsPage() {
                 <span className="text-muted-foreground">Webhook secret</span>
                 <span className="font-medium flex items-center">
                   <StatusDot ok={vapiConfig.webhookSecretConfigured} />
-                  {vapiConfig.webhookSecretConfigured ? "Set" : "Not set (optional)"}
+                  {vapiConfig.webhookSecretConfigured ? "Set" : "Not set"}
                 </span>
               </div>
             </div>
@@ -113,6 +113,14 @@ export default function SettingsPage() {
             {!vapiConfig.isLive && (
               <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
                 Set <code>VAPI_API_KEY</code>, <code>VAPI_PHONE_NUMBER_ID</code>, and <code>VAPI_ASSISTANT_ID</code> in the Replit Secrets panel to enable live calls.
+              </p>
+            )}
+
+            {vapiConfig.isLive && !vapiConfig.webhookSecretConfigured && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
+                <strong>Webhook secret not set.</strong> Without it, anyone can send fabricated call events to this server.
+                Generate a random secret, add it to Replit Secrets as <code>VAPI_WEBHOOK_SECRET</code>, then paste
+                the same value into your Vapi dashboard under <strong>Assistant → Server → Secret</strong>.
               </p>
             )}
           </div>
