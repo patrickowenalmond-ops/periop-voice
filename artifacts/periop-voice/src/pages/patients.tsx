@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -152,7 +152,8 @@ export default function Patients() {
                 <FormField control={form.control} name="phone" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Phone</FormLabel>
-                    <FormControl><Input {...field} data-testid="input-phone" /></FormControl>
+                    <FormControl><Input {...field} placeholder="e.g. 555 123 4567" data-testid="input-phone" /></FormControl>
+                    <FormDescription>US numbers can omit the country code — +1 is added automatically. For other countries, include the + and country code.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )} />

@@ -16,7 +16,17 @@ interface VapiCallResult {
 // Vapi requires phone numbers in E.164 format (e.g. +15551234567) with no
 // dashes, spaces, or parentheses. Normalize common stored formats before use.
 function toE164(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+
+  // If the input already specified a country code with a leading "+", trust it.
+  if (trimmed.startsWith("+")) return `+${digits}`;
+
+  // Otherwise assume North America (NANP) and add the +1 country code.
+  // 10 digits => bare US/CA number; 11 digits starting with 1 => already has it.
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+
   return `+${digits}`;
 }
 
