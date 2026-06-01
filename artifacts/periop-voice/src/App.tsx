@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from "@clerk/react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
@@ -69,23 +68,6 @@ const clerkAppearance = {
     dividerText: "text-[hsl(215.4,16.3%,46.9%)]",
   },
 };
-
-function ClerkAuthSync() {
-  const { getToken, isSignedIn } = useAuth();
-
-  useEffect(() => {
-    if (isSignedIn) {
-      setAuthTokenGetter(() => getToken());
-    } else {
-      setAuthTokenGetter(null);
-    }
-    return () => {
-      setAuthTokenGetter(null);
-    };
-  }, [isSignedIn, getToken]);
-
-  return null;
-}
 
 function InvalidateOnSignIn() {
   const { client } = useClerk();
@@ -186,22 +168,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const [, setLocation] = useLocation();
   const [meData, setMeData] = useState<{ role?: string } | null>(null);
   const [meLoaded, setMeLoaded] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn) return;
-    getToken().then(token =>
-      fetch("/api/users/me", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-    )
+    fetch(`${basePath}/api/users/me`, { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
       .then(data => { setMeData(data); setMeLoaded(true); })
       .catch(() => setMeLoaded(true));
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn]);
 
   if (!isLoaded || !meLoaded) return <AppLoading />;
   if (!isSignedIn) { setLocation("/"); return null; }
@@ -286,7 +264,6 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={basePath}>
-            <ClerkAuthSync />
             <InvalidateOnSignIn />
             <Router />
           </WouterRouter>

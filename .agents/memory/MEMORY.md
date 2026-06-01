@@ -1,0 +1,1 @@
+- [Clerk Express v2 auth access](clerk-express-v2-auth.md) — `req.auth` is a function in @clerk/express v2; read identity via `getAuth(req)`, web auth is cookie-based (never Bearer).

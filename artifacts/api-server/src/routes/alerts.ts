@@ -42,7 +42,7 @@ router.get("/alerts", async (req, res): Promise<void> => {
 
 router.post("/alerts/:id/acknowledge", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
-  const clerkId = (req as any).auth?.userId ?? "system";
+  const clerkId = (req as any).userId ?? "system";
 
   const [alert] = await db
     .update(alertsTable)

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getAuth } from "@clerk/express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, desc, count } from "drizzle-orm";
@@ -27,12 +28,13 @@ async function resolveInitialRole(clerkUserId: string): Promise<"admin" | "coord
 }
 
 router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
-  const clerkUserId = (req as any).auth?.userId;
+  const auth = getAuth(req);
+  const clerkUserId = auth?.sessionClaims?.userId || auth?.userId;
 
   let [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
 
   if (!user) {
-    const sessionClaims = (req as any).auth?.sessionClaims ?? {};
+    const sessionClaims = auth?.sessionClaims ?? {};
     const email = sessionClaims.email ?? `${clerkUserId}@unknown.com`;
     const firstName = sessionClaims.given_name ?? sessionClaims.firstName ?? null;
     const lastName = sessionClaims.family_name ?? sessionClaims.lastName ?? null;

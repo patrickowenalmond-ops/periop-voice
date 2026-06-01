@@ -13,6 +13,13 @@ interface VapiCallResult {
   status: string;
 }
 
+// Vapi requires phone numbers in E.164 format (e.g. +15551234567) with no
+// dashes, spaces, or parentheses. Normalize common stored formats before use.
+function toE164(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `+${digits}`;
+}
+
 class VapiClient {
   private readonly baseUrl = "https://api.vapi.ai";
 
@@ -47,7 +54,7 @@ class VapiClient {
       body: JSON.stringify({
         phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
         customer: {
-          number: phone,
+          number: toE164(phone),
           name: `${patient.firstName} ${patient.lastName}`,
         },
         assistantId: process.env.VAPI_ASSISTANT_ID,
