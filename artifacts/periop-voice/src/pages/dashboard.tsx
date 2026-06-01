@@ -35,6 +35,11 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground mt-0.5">Peri-operative call operations overview</p>
       </div>
 
+      {/* Weekly procedure calendar */}
+      <div className="mb-6">
+        <WeekCalendar />
+      </div>
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {sumLoading ? (
@@ -51,11 +56,6 @@ export default function Dashboard() {
             <StatCard label="Procedures This Week" value={summary?.proceduresThisWeek ?? 0} icon={Calendar} />
           </>
         )}
-      </div>
-
-      {/* Weekly procedure calendar */}
-      <div className="mb-6">
-        <WeekCalendar />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
