@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   useCreateProcedure,
   useScheduleProcedureCalls,
@@ -16,6 +16,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { UserPlus } from "lucide-react";
+import { PatientFormDialog } from "@/components/patient-form-dialog";
 
 const procedureSchema = z.object({
   patientId: z.string().min(1, "Required"),
@@ -61,10 +63,23 @@ export function ProcedureFormDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [showNewPatient, setShowNewPatient] = useState(false);
+  const [extraPatients, setExtraPatients] = useState<{ id: number; firstName: string; lastName: string }[]>([]);
 
   const { data: patients } = useListPatients({ limit: 200 } as any);
   const createProcedure = useCreateProcedure();
   const scheduleCalls = useScheduleProcedureCalls();
+
+  // Merge any just-created patient(s) into the options so the auto-selected
+  // patient shows immediately, before the list query refetch catches up.
+  const patientOptions = (() => {
+    const byId = new Map<number, { id: number; firstName: string; lastName: string }>();
+    for (const p of patients ?? []) byId.set(p.id, p);
+    for (const p of extraPatients) byId.set(p.id, p);
+    return Array.from(byId.values()).sort((a, b) =>
+      `${a.lastName}${a.firstName}`.localeCompare(`${b.lastName}${b.firstName}`),
+    );
+  })();
 
   const form = useForm<ProcedureForm>({
     resolver: zodResolver(procedureSchema),
@@ -79,6 +94,7 @@ export function ProcedureFormDialog({
         ...emptyDefaults,
         scheduledDate: defaultDate ? toDateTimeLocal(defaultDate) : "",
       });
+      setExtraPatients([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDate]);
@@ -113,6 +129,7 @@ export function ProcedureFormDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>New Procedure</DialogTitle></DialogHeader>
@@ -120,7 +137,17 @@ export function ProcedureFormDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
             <FormField control={form.control} name="patientId" render={({ field }) => (
               <FormItem>
-                <FormLabel>Patient</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Patient</FormLabel>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPatient(true)}
+                    data-testid="button-new-patient-inline"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <UserPlus className="h-3 w-3" /> New patient
+                  </button>
+                </div>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="select-patient">
@@ -128,7 +155,7 @@ export function ProcedureFormDialog({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {patients?.map(p => (
+                    {patientOptions.map(p => (
                       <SelectItem key={p.id} value={String(p.id)}>{p.lastName}, {p.firstName}</SelectItem>
                     ))}
                   </SelectContent>
@@ -192,5 +219,16 @@ export function ProcedureFormDialog({
         </Form>
       </DialogContent>
     </Dialog>
+
+    <PatientFormDialog
+      open={showNewPatient}
+      onOpenChange={setShowNewPatient}
+      onCreated={(patient) => {
+        setExtraPatients((prev) => [...prev.filter((p) => p.id !== patient.id), patient]);
+        form.setValue("patientId", String(patient.id), { shouldValidate: true });
+        toast({ title: "Patient added", description: `${patient.firstName} ${patient.lastName} selected.` });
+      }}
+    />
+    </>
   );
 }
