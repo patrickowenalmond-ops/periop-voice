@@ -1,17 +1,47 @@
+import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useGetPatient, useGetPatientTimeline, getGetPatientTimelineQueryKey, useDeletePatient } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatters } from "@/lib/formatters";
 import { CallTypeBadge } from "@/components/status-badge";
-import { ArrowLeft, Phone, AlertTriangle, Clock } from "lucide-react";
+import { PatientFormDialog } from "@/components/patient-form-dialog";
+import { ArrowLeft, AlertTriangle, Clock, Pencil, Trash2, Phone, Mail, Calendar, Globe, IdCard, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+
+function initials(first?: string, last?: string): string {
+  return `${(first?.[0] ?? "").toUpperCase()}${(last?.[0] ?? "").toUpperCase()}` || "?";
+}
+
+function ageFromDob(dob?: string | null): string | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 150 ? `${age} yrs` : null;
+}
+
+function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+        <p className="text-sm text-foreground font-medium break-words">{value}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function PatientDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [showEdit, setShowEdit] = useState(false);
 
   const patientId = Number(id);
   const { data: patient, isLoading } = useGetPatient(patientId);
@@ -28,51 +58,66 @@ export default function PatientDetail() {
     });
   };
 
-  if (isLoading) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>;
+  if (isLoading) return <div className="p-6 max-w-4xl mx-auto"><Skeleton className="h-40 w-full rounded-lg" /></div>;
   if (!patient) return <div className="p-6 text-muted-foreground">Patient not found</div>;
+
+  const age = ageFromDob(patient.dateOfBirth);
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/patients">
-          <Button variant="ghost" size="sm" className="gap-1.5">
-            <ArrowLeft className="w-4 h-4" /> Patients
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-foreground">{patient.firstName} {patient.lastName}</h1>
-          <p className="text-sm text-muted-foreground">MRN: {patient.mrn ?? "—"}</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive" data-testid="button-delete-patient">
-          Delete
+      <Link href="/patients">
+        <Button variant="ghost" size="sm" className="gap-1.5 mb-4 -ml-2 text-muted-foreground">
+          <ArrowLeft className="w-4 h-4" /> Patients
         </Button>
+      </Link>
+
+      {/* Profile header */}
+      <div className="bg-card border border-card-border rounded-lg p-5 mb-4">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold shrink-0">
+            {initials(patient.firstName, patient.lastName)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-semibold text-foreground truncate">{patient.firstName} {patient.lastName}</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
+              {age && <span>{age}</span>}
+              <span>MRN: {patient.mrn ?? "—"}</span>
+              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{patient.phone}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)} className="gap-1.5" data-testid="button-edit-patient">
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDelete} className="gap-1.5 text-destructive hover:text-destructive" data-testid="button-delete-patient">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </Button>
+          </div>
+        </div>
       </div>
 
+      {/* Details */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-card border border-card-border rounded-lg p-4">
-          <h2 className="text-sm font-semibold text-foreground mb-3">Demographics</h2>
-          <dl className="space-y-2">
-            {[
-              ["Date of Birth", patient.dateOfBirth ? formatters.date(patient.dateOfBirth) : "—"],
-              ["Phone", patient.phone],
-              ["Email", patient.email ?? "—"],
-              ["Language", patient.language?.toUpperCase() ?? "EN"],
-              ["EHR ID", patient.ehrPatientId ?? "—"],
-            ].map(([label, value]) => (
-              <div key={label} className="flex justify-between text-sm">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="text-foreground font-medium">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <h2 className="text-sm font-semibold text-foreground mb-1">Demographics & Contact</h2>
+          <div className="divide-y divide-border">
+            <InfoRow icon={Calendar} label="Date of Birth" value={patient.dateOfBirth ? formatters.date(patient.dateOfBirth) : "—"} />
+            <InfoRow icon={Phone} label="Phone" value={patient.phone} />
+            <InfoRow icon={Mail} label="Email" value={patient.email ?? "—"} />
+            <InfoRow icon={Globe} label="Language" value={patient.language?.toUpperCase() ?? "EN"} />
+            <InfoRow icon={IdCard} label="MRN" value={patient.mrn ?? "—"} />
+            <InfoRow icon={IdCard} label="EHR ID" value={patient.ehrPatientId ?? "—"} />
+          </div>
         </div>
 
-        {patient.notes && (
-          <div className="bg-card border border-card-border rounded-lg p-4">
-            <h2 className="text-sm font-semibold text-foreground mb-3">Notes</h2>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{patient.notes}</p>
-          </div>
-        )}
+        <div className="bg-card border border-card-border rounded-lg p-4">
+          <h2 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5"><FileText className="w-4 h-4 text-muted-foreground" /> Notes</h2>
+          {patient.notes ? (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap pt-2">{patient.notes}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground/70 italic pt-2">No notes yet. Use Edit to add notes.</p>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-3">
@@ -125,6 +170,12 @@ export default function PatientDetail() {
           </table>
         )}
       </div>
+
+      <PatientFormDialog
+        open={showEdit}
+        onOpenChange={setShowEdit}
+        patient={patient as any}
+      />
     </div>
   );
 }
