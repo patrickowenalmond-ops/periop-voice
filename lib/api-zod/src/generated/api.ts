@@ -1000,6 +1000,52 @@ export const GetCallsTodayResponse = zod.array(GetCallsTodayResponseItem)
 
 
 /**
+ * @summary Get procedures for a week with their call statuses
+ */
+export const GetDashboardCalendarQueryParams = zod.object({
+  "weekStart": zod.date().optional().describe('Any date within the desired week; the server normalizes to that week\'s Sunday.')
+})
+
+export const getDashboardCalendarResponsePatientLanguageDefault = `en`;
+
+export const GetDashboardCalendarResponseItem = zod.object({
+  "id": zod.number(),
+  "patientId": zod.number(),
+  "procedureName": zod.string(),
+  "procedureCode": zod.string().nullish(),
+  "scheduledDate": zod.coerce.date(),
+  "facility": zod.string().nullish(),
+  "surgeon": zod.string().nullish(),
+  "arrivalTime": zod.string().nullish(),
+  "specialInstructions": zod.string().nullish(),
+  "ehrProcedureId": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional(),
+  "patient": zod.object({
+  "id": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "dateOfBirth": zod.coerce.date(),
+  "phone": zod.string(),
+  "email": zod.string().nullish(),
+  "mrn": zod.string().nullish(),
+  "language": zod.string().default(getDashboardCalendarResponsePatientLanguageDefault),
+  "notes": zod.string().nullish(),
+  "ehrPatientId": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+}).optional(),
+  "calls": zod.array(zod.object({
+  "id": zod.number(),
+  "callType": zod.enum(['pre_op_history', 'pre_op_instructions', 'post_op_24h', 'post_op_72h', 'post_op_2wk']),
+  "status": zod.enum(['pending', 'in_progress', 'completed', 'failed', 'no_answer', 'cancelled']),
+  "scheduledAt": zod.coerce.date()
+}))
+})
+export const GetDashboardCalendarResponse = zod.array(GetDashboardCalendarResponseItem)
+
+
+/**
  * @summary Get recent call activity feed
  */
 export const getRecentActivityQueryLimitDefault = 20;

@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { formatters } from "@/lib/formatters";
 import { CallStatusBadge, CallTypeBadge } from "@/components/status-badge";
+import { WeekCalendar } from "@/components/week-calendar";
 import { Phone, Bell, Users, CheckCircle, Activity, Calendar, PhoneCall, AlertTriangle } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, sub, className }: { label: string; value: string | number; icon: React.ElementType; sub?: string; className?: string }) {
@@ -50,6 +51,11 @@ export default function Dashboard() {
             <StatCard label="Procedures This Week" value={summary?.proceduresThisWeek ?? 0} icon={Calendar} />
           </>
         )}
+      </div>
+
+      {/* Weekly procedure calendar */}
+      <div className="mb-6">
+        <WeekCalendar />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

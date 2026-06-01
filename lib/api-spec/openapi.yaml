@@ -614,6 +614,26 @@ paths:
                 items:
                   $ref: "#/components/schemas/ScheduledCall"
 
+  /dashboard/calendar:
+    get:
+      operationId: getDashboardCalendar
+      tags: [dashboard]
+      summary: Get procedures for a week with their call statuses
+      parameters:
+        - in: query
+          name: weekStart
+          schema: { type: string, format: date }
+          description: Any date within the desired week; the server normalizes to that week's Sunday.
+      responses:
+        "200":
+          description: Procedures in the week with call statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalendarProcedure"
+
   /dashboard/recent-activity:
     get:
       operationId: getRecentActivity
@@ -850,6 +870,43 @@ components:
       properties:
         status: { type: string, enum: [pending, cancelled] }
         scheduledAt: { type: string, format: date-time }
+
+    # ── CALENDAR ────────────────────────────────────────────────
+    CalendarCall:
+      type: object
+      required: [id, callType, status, scheduledAt]
+      properties:
+        id: { type: integer }
+        callType:
+          type: string
+          enum: [pre_op_history, pre_op_instructions, post_op_24h, post_op_72h, post_op_2wk]
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed, no_answer, cancelled]
+        scheduledAt: { type: string, format: date-time }
+
+    CalendarProcedure:
+      type: object
+      required: [id, patientId, procedureName, scheduledDate, createdAt, calls]
+      properties:
+        id: { type: integer }
+        patientId: { type: integer }
+        procedureName: { type: string }
+        procedureCode: { type: ["string", "null"] }
+        scheduledDate: { type: string, format: date-time }
+        facility: { type: ["string", "null"] }
+        surgeon: { type: ["string", "null"] }
+        arrivalTime: { type: ["string", "null"] }
+        specialInstructions: { type: ["string", "null"] }
+        ehrProcedureId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        patient:
+          $ref: "#/components/schemas/Patient"
+        calls:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarCall"
 
     # ── CALL RECORD ─────────────────────────────────────────────
     CallRecord:

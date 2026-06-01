@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { scheduledCallsTable, callRecordsTable, alertsTable, patientsTable, proceduresTable } from "@workspace/db/schema";
-import { eq, count, and, gte, lte, desc } from "drizzle-orm";
+import { eq, count, and, gte, lte, lt, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
@@ -112,6 +112,68 @@ router.get("/dashboard/recent-activity", async (req, res) => {
     .limit(limit);
 
   res.json(rows.map(r => ({ ...r.record, hasFlags: r.record.hasFlags === "true", patient: r.patient })));
+});
+
+router.get("/dashboard/calendar", async (req, res) => {
+  const weekStartParam = typeof req.query.weekStart === "string" ? req.query.weekStart : undefined;
+  const base = weekStartParam ? new Date(weekStartParam) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    res.status(400).json({ error: "Invalid weekStart date" });
+    return;
+  }
+
+  // Normalize to the Sunday 00:00 of the week containing `base`.
+  const weekStart = new Date(base);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  // The client buckets each procedure into a day column using its own local
+  // timezone, then drops anything outside the 7 visible days. Because the
+  // server and client timezones may differ, widen the query by a one-day buffer
+  // on each side so no boundary-time procedure is ever missed before the client
+  // can place it. The client remains the authority on day placement.
+  const queryStart = new Date(weekStart);
+  queryStart.setDate(queryStart.getDate() - 1);
+  const queryEnd = new Date(weekEnd);
+  queryEnd.setDate(queryEnd.getDate() + 1);
+
+  const procRows = await db
+    .select({ procedure: proceduresTable, patient: patientsTable })
+    .from(proceduresTable)
+    .leftJoin(patientsTable, eq(proceduresTable.patientId, patientsTable.id))
+    .where(and(
+      gte(proceduresTable.scheduledDate, queryStart),
+      lt(proceduresTable.scheduledDate, queryEnd),
+    ))
+    .orderBy(proceduresTable.scheduledDate);
+
+  const procedureIds = procRows.map(r => r.procedure.id);
+  const calls = procedureIds.length
+    ? await db
+        .select()
+        .from(scheduledCallsTable)
+        .where(inArray(scheduledCallsTable.procedureId, procedureIds))
+    : [];
+
+  const callsByProcedure = new Map<number, typeof calls>();
+  for (const c of calls) {
+    const list = callsByProcedure.get(c.procedureId) ?? [];
+    list.push(c);
+    callsByProcedure.set(c.procedureId, list);
+  }
+
+  res.json(procRows.map(r => ({
+    ...r.procedure,
+    patient: r.patient,
+    calls: (callsByProcedure.get(r.procedure.id) ?? []).map(c => ({
+      id: c.id,
+      callType: c.callType,
+      status: c.status,
+      scheduledAt: c.scheduledAt,
+    })),
+  })));
 });
 
 export default router;

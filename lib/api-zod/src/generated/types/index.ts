@@ -8,6 +8,10 @@
 
 export * from './alert';
 export * from './alertSeverity';
+export * from './calendarCall';
+export * from './calendarCallCallType';
+export * from './calendarCallStatus';
+export * from './calendarProcedure';
 export * from './callRecord';
 export * from './callRecordCallType';
 export * from './callRecordDetail';
@@ -19,6 +23,7 @@ export * from './callTemplateInput';
 export * from './callTemplateInputCallType';
 export * from './callTemplateUpdate';
 export * from './dashboardSummary';
+export * from './getDashboardCalendarParams';
 export * from './getRecentActivityParams';
 export * from './healthStatus';
 export * from './listAlertsParams';

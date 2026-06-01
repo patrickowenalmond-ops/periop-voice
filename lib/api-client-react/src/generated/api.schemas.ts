@@ -149,6 +149,59 @@ export interface ScheduledCallUpdate {
   scheduledAt?: string;
 }
 
+export type CalendarCallCallType = typeof CalendarCallCallType[keyof typeof CalendarCallCallType];
+
+
+export const CalendarCallCallType = {
+  pre_op_history: 'pre_op_history',
+  pre_op_instructions: 'pre_op_instructions',
+  post_op_24h: 'post_op_24h',
+  post_op_72h: 'post_op_72h',
+  post_op_2wk: 'post_op_2wk',
+} as const;
+
+export type CalendarCallStatus = typeof CalendarCallStatus[keyof typeof CalendarCallStatus];
+
+
+export const CalendarCallStatus = {
+  pending: 'pending',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  failed: 'failed',
+  no_answer: 'no_answer',
+  cancelled: 'cancelled',
+} as const;
+
+export interface CalendarCall {
+  id: number;
+  callType: CalendarCallCallType;
+  status: CalendarCallStatus;
+  scheduledAt: string;
+}
+
+export interface CalendarProcedure {
+  id: number;
+  patientId: number;
+  procedureName: string;
+  /** @nullable */
+  procedureCode?: string | null;
+  scheduledDate: string;
+  /** @nullable */
+  facility?: string | null;
+  /** @nullable */
+  surgeon?: string | null;
+  /** @nullable */
+  arrivalTime?: string | null;
+  /** @nullable */
+  specialInstructions?: string | null;
+  /** @nullable */
+  ehrProcedureId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  patient?: Patient;
+  calls: CalendarCall[];
+}
+
 export type CallRecordCallType = typeof CallRecordCallType[keyof typeof CallRecordCallType];
 
 
@@ -441,6 +494,13 @@ export const ListAlertsSeverity = {
   high: 'high',
   critical: 'critical',
 } as const;
+
+export type GetDashboardCalendarParams = {
+/**
+ * Any date within the desired week; the server normalizes to that week's Sunday.
+ */
+weekStart?: string;
+};
 
 export type GetRecentActivityParams = {
 limit?: number;
