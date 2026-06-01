@@ -1,18 +1,21 @@
+import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useGetProcedure, useListScheduledCalls, useTriggerCall, useScheduleProcedureCalls, getListScheduledCallsQueryKey } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatters } from "@/lib/formatters";
 import { CallTypeBadge, CallStatusBadge } from "@/components/status-badge";
-import { ArrowLeft, Phone, Calendar, RefreshCw } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, RefreshCw, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { ProcedureFormDialog } from "@/components/procedure-form-dialog";
 
 export default function ProcedureDetail() {
   const { id } = useParams();
   const { toast } = useToast();
   const qc = useQueryClient();
   const procedureId = Number(id);
+  const [showEdit, setShowEdit] = useState(false);
 
   const { data: procedure, isLoading } = useGetProcedure(procedureId);
   const { data: scheduledCalls, isLoading: callsLoading } = useListScheduledCalls(
@@ -59,6 +62,9 @@ export default function ProcedureDetail() {
             </Link>
           </p>
         </div>
+        <Button size="sm" variant="outline" onClick={() => setShowEdit(true)} data-testid="button-edit-procedure">
+          <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
+        </Button>
         <Button size="sm" variant="outline" onClick={handleSchedule} disabled={scheduleCalls.isPending} data-testid="button-schedule-calls">
           <RefreshCw className="w-4 h-4 mr-1.5" />
           {scheduleCalls.isPending ? "Scheduling..." : "Re-schedule Calls"}
@@ -140,6 +146,12 @@ export default function ProcedureDetail() {
           </table>
         )}
       </div>
+
+      <ProcedureFormDialog
+        open={showEdit}
+        onOpenChange={setShowEdit}
+        procedure={procedure as any}
+      />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   useCreateProcedure,
+  useUpdateProcedure,
   useScheduleProcedureCalls,
   getListProceduresQueryKey,
+  getGetProcedureQueryKey,
   getGetDashboardCalendarQueryKey,
   useListPatients,
 } from "@workspace/api-client-react";
@@ -50,24 +52,41 @@ const emptyDefaults: ProcedureForm = {
   specialInstructions: "",
 };
 
+type EditableProcedure = {
+  id: number;
+  patientId: number;
+  procedureName: string;
+  scheduledDate: string;
+  facility?: string | null;
+  surgeon?: string | null;
+  arrivalTime?: string | null;
+  specialInstructions?: string | null;
+};
+
 export function ProcedureFormDialog({
   open,
   onOpenChange,
   defaultDate,
   onCreated,
+  procedure,
+  onUpdated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultDate?: Date;
   onCreated?: () => void;
+  procedure?: EditableProcedure;
+  onUpdated?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [extraPatients, setExtraPatients] = useState<{ id: number; firstName: string; lastName: string }[]>([]);
+  const isEdit = !!procedure;
 
   const { data: patients } = useListPatients({ limit: 200 } as any);
   const createProcedure = useCreateProcedure();
+  const updateProcedure = useUpdateProcedure();
   const scheduleCalls = useScheduleProcedureCalls();
 
   // Merge any just-created patient(s) into the options so the auto-selected
@@ -86,20 +105,52 @@ export function ProcedureFormDialog({
     defaultValues: emptyDefaults,
   });
 
-  // When the dialog opens, prefill the date if one was supplied (e.g. a tapped
-  // calendar day) and clear stale values from a previous open.
+  // Prefill on open. In edit mode, populate from the procedure (keyed on its
+  // stable id so a background refetch can't wipe in-progress edits). In create
+  // mode, prefill the date if one was supplied (e.g. a tapped calendar day).
   useEffect(() => {
     if (open) {
-      form.reset({
-        ...emptyDefaults,
-        scheduledDate: defaultDate ? toDateTimeLocal(defaultDate) : "",
-      });
+      if (procedure) {
+        form.reset({
+          patientId: String(procedure.patientId),
+          procedureName: procedure.procedureName,
+          scheduledDate: procedure.scheduledDate ? toDateTimeLocal(new Date(procedure.scheduledDate)) : "",
+          facility: procedure.facility ?? "",
+          surgeon: procedure.surgeon ?? "",
+          arrivalTime: procedure.arrivalTime ?? "",
+          specialInstructions: procedure.specialInstructions ?? "",
+        });
+      } else {
+        form.reset({
+          ...emptyDefaults,
+          scheduledDate: defaultDate ? toDateTimeLocal(defaultDate) : "",
+        });
+      }
       setExtraPatients([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultDate]);
+  }, [open, defaultDate, procedure?.id]);
 
   const onSubmit = (data: ProcedureForm) => {
+    if (isEdit && procedure) {
+      // patientId is not editable via the update API; omit it.
+      const { patientId: _patientId, ...rest } = data;
+      updateProcedure.mutate(
+        { id: procedure.id, data: { ...rest, scheduledDate: new Date(data.scheduledDate).toISOString() } } as any,
+        {
+          onSuccess: () => {
+            toast({ title: "Procedure updated" });
+            qc.invalidateQueries({ queryKey: getListProceduresQueryKey() });
+            qc.invalidateQueries({ queryKey: getGetProcedureQueryKey(procedure.id) });
+            qc.invalidateQueries({ queryKey: getGetDashboardCalendarQueryKey() });
+            onOpenChange(false);
+            onUpdated?.();
+          },
+          onError: () => toast({ title: "Failed to update procedure", variant: "destructive" }),
+        }
+      );
+      return;
+    }
     createProcedure.mutate(
       { data: { ...data, patientId: Number(data.patientId), scheduledDate: new Date(data.scheduledDate).toISOString() } } as any,
       {
@@ -132,23 +183,25 @@ export function ProcedureFormDialog({
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>New Procedure</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? "Edit Procedure" : "New Procedure"}</DialogTitle></DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
             <FormField control={form.control} name="patientId" render={({ field }) => (
               <FormItem>
                 <div className="flex items-center justify-between">
                   <FormLabel>Patient</FormLabel>
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPatient(true)}
-                    data-testid="button-new-patient-inline"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                  >
-                    <UserPlus className="h-3 w-3" /> New patient
-                  </button>
+                  {!isEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPatient(true)}
+                      data-testid="button-new-patient-inline"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      <UserPlus className="h-3 w-3" /> New patient
+                    </button>
+                  )}
                 </div>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isEdit}>
                   <FormControl>
                     <SelectTrigger data-testid="select-patient">
                       <SelectValue placeholder="Select patient..." />
@@ -211,8 +264,10 @@ export function ProcedureFormDialog({
             )} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={createProcedure.isPending} data-testid="button-submit-procedure">
-                {createProcedure.isPending ? "Creating..." : "Create & Schedule Calls"}
+              <Button type="submit" disabled={createProcedure.isPending || updateProcedure.isPending} data-testid="button-submit-procedure">
+                {isEdit
+                  ? (updateProcedure.isPending ? "Saving..." : "Save Changes")
+                  : (createProcedure.isPending ? "Creating..." : "Create & Schedule Calls")}
               </Button>
             </DialogFooter>
           </form>
