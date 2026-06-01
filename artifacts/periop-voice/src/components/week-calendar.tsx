@@ -6,7 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatters } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Plus } from "lucide-react";
+import { ProcedureFormDialog } from "@/components/procedure-form-dialog";
 
 const CALL_ORDER = ["pre_op_history", "pre_op_instructions", "post_op_24h", "post_op_72h", "post_op_2wk"] as const;
 
@@ -110,10 +111,17 @@ function ProcedureCard({ proc }: { proc: CalendarProcedure }) {
 
 export function WeekCalendar() {
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  const [scheduleDate, setScheduleDate] = useState<Date | null>(null);
   const { data, isLoading } = useGetDashboardCalendar({ weekStart: toISODate(weekStart) });
 
   const today = new Date();
   const weekEnd = addDays(weekStart, 6);
+
+  const openSchedule = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(8, 0, 0, 0);
+    setScheduleDate(d);
+  };
 
   const days = useMemo(() => {
     const buckets: { date: Date; procedures: CalendarProcedure[] }[] = Array.from({ length: 7 }, (_, i) => ({
@@ -175,18 +183,40 @@ export function WeekCalendar() {
           {days.map(({ date, procedures }) => {
             const isToday = sameDay(date, today);
             return (
-              <div key={date.toISOString()} className="border-r border-border last:border-r-0 min-h-[160px] flex flex-col">
-                <div className={cn("px-2 py-1.5 text-center border-b border-border", isToday ? "bg-primary/10" : "bg-muted/30")}>
+              <div key={date.toISOString()} className="group/day border-r border-border last:border-r-0 min-h-[160px] flex flex-col">
+                <div className={cn("relative px-2 py-1.5 text-center border-b border-border", isToday ? "bg-primary/10" : "bg-muted/30")}>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{DAY_NAMES[date.getDay()]}</p>
                   <p className={cn("text-sm font-semibold tabular-nums", isToday ? "text-primary" : "text-foreground")}>{date.getDate()}</p>
+                  <button
+                    type="button"
+                    onClick={() => openSchedule(date)}
+                    data-testid={`calendar-add-${toISODate(date)}`}
+                    aria-label={`Schedule procedure on ${date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}
+                    title="Schedule procedure"
+                    className="absolute top-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover/day:opacity-100 focus:opacity-100 hover:bg-primary hover:text-primary-foreground transition-opacity"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="p-1.5 space-y-1.5 flex-1">
                   {isLoading ? (
                     <Skeleton className="h-14 rounded-md" />
-                  ) : procedures.length === 0 ? (
-                    <div className="h-full min-h-[80px]" />
                   ) : (
                     procedures.map(proc => <ProcedureCard key={proc.id} proc={proc} />)
+                  )}
+                  {!isLoading && (
+                    <button
+                      type="button"
+                      onClick={() => openSchedule(date)}
+                      data-testid={`calendar-add-cell-${toISODate(date)}`}
+                      className={cn(
+                        "flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border/60 py-1.5 text-[11px] text-muted-foreground opacity-70 transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground hover:opacity-100 focus:border-primary/40 focus:text-foreground focus:opacity-100",
+                        procedures.length === 0 && "h-full min-h-[80px]",
+                      )}
+                      aria-label={`Schedule procedure on ${date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}
+                    >
+                      <Plus className="h-3 w-3" /> Add
+                    </button>
                   )}
                 </div>
               </div>
@@ -194,6 +224,12 @@ export function WeekCalendar() {
           })}
         </div>
       </div>
+
+      <ProcedureFormDialog
+        open={scheduleDate !== null}
+        onOpenChange={(o) => { if (!o) setScheduleDate(null); }}
+        defaultDate={scheduleDate ?? undefined}
+      />
     </div>
   );
 }
