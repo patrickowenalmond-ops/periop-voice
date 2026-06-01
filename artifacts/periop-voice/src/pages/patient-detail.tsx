@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
-import { useGetPatient, useGetPatientTimeline, getGetPatientTimelineQueryKey, useDeletePatient } from "@workspace/api-client-react";
+import {
+  useGetPatient,
+  useGetPatientTimeline,
+  getGetPatientTimelineQueryKey,
+  useDeletePatient,
+  useListProcedures,
+  getListProceduresQueryKey,
+} from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { formatters } from "@/lib/formatters";
 import { CallTypeBadge } from "@/components/status-badge";
 import { PatientFormDialog } from "@/components/patient-form-dialog";
-import { ArrowLeft, AlertTriangle, Clock, Pencil, Trash2, Phone, Mail, Calendar, Globe, IdCard, FileText } from "lucide-react";
+import { ProcedureFormDialog } from "@/components/procedure-form-dialog";
+import { ArrowLeft, AlertTriangle, Clock, Pencil, Trash2, Phone, Mail, Calendar, Globe, IdCard, FileText, Stethoscope, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
@@ -42,13 +50,20 @@ export default function PatientDetail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showEdit, setShowEdit] = useState(false);
+  const [editProcedureId, setEditProcedureId] = useState<number | null>(null);
 
   const patientId = Number(id);
   const { data: patient, isLoading } = useGetPatient(patientId);
+  const { data: procedures, isLoading: proceduresLoading } = useListProcedures(
+    { patientId } as any,
+    { query: { queryKey: getListProceduresQueryKey({ patientId } as any) } },
+  );
   const { data: timeline, isLoading: timelineLoading } = useGetPatientTimeline(patientId, {
     query: { queryKey: getGetPatientTimelineQueryKey(patientId) },
   });
   const deletePatient = useDeletePatient();
+
+  const editingProcedure = procedures?.find((p) => p.id === editProcedureId) ?? null;
 
   const handleDelete = () => {
     if (!confirm("Delete this patient and all their records?")) return;
@@ -121,10 +136,59 @@ export default function PatientDetail() {
       </div>
 
       <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+          <Stethoscope className="w-4 h-4 text-muted-foreground" /> Procedures
+        </h2>
+        <span className="text-xs text-muted-foreground">{procedures?.length ?? 0} total</span>
+      </div>
+
+      <div className="space-y-2 mb-6">
+        {proceduresLoading ? (
+          Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />)
+        ) : procedures?.length === 0 ? (
+          <div className="bg-card border border-card-border rounded-lg px-4 py-8 text-center text-sm text-muted-foreground">
+            No procedures scheduled for this patient.
+          </div>
+        ) : (
+          procedures?.map((proc) => (
+            <div key={proc.id} className="bg-card border border-card-border rounded-lg p-4" data-testid={`card-procedure-${proc.id}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={`/procedures/${proc.id}`} className="text-sm font-semibold text-foreground hover:underline inline-flex items-center gap-1">
+                    {proc.procedureName} <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {proc.scheduledDate ? formatters.datetime(proc.scheduledDate) : "—"}
+                    </span>
+                    {proc.facility && <span>{proc.facility}</span>}
+                    {proc.surgeon && <span>Dr. {proc.surgeon}</span>}
+                    {proc.arrivalTime && <span>Arrive {proc.arrivalTime}</span>}
+                  </div>
+                  {proc.specialInstructions && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+                      {proc.specialInstructions}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditProcedureId(proc.id)}
+                  className="gap-1.5 shrink-0"
+                  data-testid={`button-edit-procedure-${proc.id}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">Call Timeline</h2>
-        <Link href={`/procedures?patientId=${patientId}`} className="text-xs text-primary hover:underline">
-          View procedures
-        </Link>
       </div>
 
       <div className="bg-card border border-card-border rounded-lg overflow-hidden">
@@ -175,6 +239,12 @@ export default function PatientDetail() {
         open={showEdit}
         onOpenChange={setShowEdit}
         patient={patient as any}
+      />
+
+      <ProcedureFormDialog
+        open={editProcedureId !== null}
+        onOpenChange={(o) => { if (!o) setEditProcedureId(null); }}
+        procedure={editingProcedure as any}
       />
     </div>
   );
