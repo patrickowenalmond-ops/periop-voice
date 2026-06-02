@@ -4,6 +4,7 @@ import { scheduledCallsTable, callRecordsTable, alertsTable } from "@workspace/d
 import { eq } from "drizzle-orm";
 import { transcriptAnalyzer } from "../lib/transcriptAnalyzer";
 import { logger } from "../lib/logger";
+import { publicUrlFor } from "../lib/publicUrl";
 import { requireAuth, requireAdmin } from "../middlewares/auth";
 
 const router = Router();
@@ -147,10 +148,7 @@ router.post("/vapi/webhook", async (req, res): Promise<void> => {
 });
 
 router.get("/vapi/config", requireAuth, (_req, res): void => {
-  const devDomain = process.env.REPLIT_DEV_DOMAIN ?? "";
-  const webhookUrl = devDomain
-    ? `https://${devDomain}/api/vapi/webhook`
-    : null;
+  const webhookUrl = publicUrlFor("/api/vapi/webhook");
 
   res.json({
     webhookUrl,

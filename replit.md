@@ -52,7 +52,7 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Cloud portability:** Build with industry-standard, deployment-agnostic technologies that can later run on AWS or Azure. Avoid proprietary Replit-only features wherever possible. Keep all external dependencies (DB, auth, AI, telephony) configured via environment variables so moving clouds is a credential/config swap, not a code rewrite. For the app's public origin (e.g. Vapi webhook callback), set `PUBLIC_BASE_URL` in production; `REPLIT_DEV_DOMAIN` is only a dev fallback.
 
 ## Gotchas
 

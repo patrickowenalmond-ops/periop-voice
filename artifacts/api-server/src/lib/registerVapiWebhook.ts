@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { publicUrlFor } from "./publicUrl";
 
 interface VapiAssistantServerConfig {
   url: string;
@@ -28,7 +29,6 @@ async function patchVapiAssistant(assistantId: string, apiKey: string, patch: Va
 export async function registerVapiWebhook(): Promise<void> {
   const apiKey = process.env.VAPI_API_KEY;
   const assistantId = process.env.VAPI_ASSISTANT_ID;
-  const devDomain = process.env.REPLIT_DEV_DOMAIN;
 
   if (!apiKey || !assistantId) {
     logger.warn(
@@ -38,12 +38,16 @@ export async function registerVapiWebhook(): Promise<void> {
     return;
   }
 
-  if (!devDomain) {
-    logger.warn("REPLIT_DEV_DOMAIN not available — cannot construct webhook URL for Vapi registration.");
+  const webhookUrl = publicUrlFor("/api/vapi/webhook");
+
+  if (!webhookUrl) {
+    logger.warn(
+      "No public base URL available — cannot construct webhook URL for Vapi registration. " +
+      "Set PUBLIC_BASE_URL (e.g. https://app.example.com) in production."
+    );
     return;
   }
 
-  const webhookUrl = `https://${devDomain}/api/vapi/webhook`;
   const secret = process.env.VAPI_WEBHOOK_SECRET;
 
   if (!secret) {

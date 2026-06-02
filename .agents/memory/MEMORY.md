@@ -1,4 +1,5 @@
 - [Clerk Express v2 auth access](clerk-express-v2-auth.md) — `req.auth` is a function in @clerk/express v2; read identity via `getAuth(req)`, web auth is cookie-based (never Bearer).
-- [API OpenAPI codegen workflow](api-codegen-workflow.md) — spec-first; route→openapi.yaml→codegen→restart. Codegen exits non-zero from a pre-existing unrelated typecheck error; verify generated output instead.
+- [API OpenAPI codegen workflow](api-codegen-workflow.md) — spec-first; route→openapi.yaml→codegen→restart. Verify generated output; api-server typecheck is separate from frontend — run both.
+- [Cloud portability + Clerk custom claims](cloud-portability.md) — keep deps env-driven for AWS/Azure; use PUBLIC_BASE_URL not REPLIT_DEV_DOMAIN; custom Clerk JWT claims must be declared in api-server/src/types/clerk.d.ts.
 - [Week calendar timezone bucketing](calendar-timezone-bucketing.md) — client is authority on day placement; server over-fetches ±1 day so no boundary row is missed across tz differences.
 - [Reusable create/edit form dialogs](form-dialog-prefill-pattern.md) — one shared dialog does create+edit; key prefill effect on entity id (not the React Query object) or refetch wipes in-progress edits.

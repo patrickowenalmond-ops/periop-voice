@@ -30,11 +30,15 @@ async function resolveInitialRole(clerkUserId: string): Promise<"admin" | "coord
 router.get("/users/me", requireAuth, async (req, res): Promise<void> => {
   const auth = getAuth(req);
   const clerkUserId = auth?.sessionClaims?.userId || auth?.userId;
+  if (!clerkUserId) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
 
   let [user] = await db.select().from(usersTable).where(eq(usersTable.clerkUserId, clerkUserId));
 
   if (!user) {
-    const sessionClaims = auth?.sessionClaims ?? {};
+    const sessionClaims: CustomJwtSessionClaims = auth?.sessionClaims ?? {};
     const email = sessionClaims.email ?? `${clerkUserId}@unknown.com`;
     const firstName = sessionClaims.given_name ?? sessionClaims.firstName ?? null;
     const lastName = sessionClaims.family_name ?? sessionClaims.lastName ?? null;
