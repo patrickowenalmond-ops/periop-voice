@@ -3,3 +3,4 @@
 - [Cloud portability + Clerk custom claims](cloud-portability.md) — keep deps env-driven for AWS/Azure; use PUBLIC_BASE_URL not REPLIT_DEV_DOMAIN; custom Clerk JWT claims must be declared in api-server/src/types/clerk.d.ts.
 - [Week calendar timezone bucketing](calendar-timezone-bucketing.md) — client is authority on day placement; server over-fetches ±1 day so no boundary row is missed across tz differences.
 - [Reusable create/edit form dialogs](form-dialog-prefill-pattern.md) — one shared dialog does create+edit; key prefill effect on entity id (not the React Query object) or refetch wipes in-progress edits.
+- [GitHub push authentication](github-push-auth.md) — the GitHub connector supports REST operations but not native git credentials; finish pushes through the Git pane or interactive gh login.
